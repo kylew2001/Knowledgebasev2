@@ -46,7 +46,10 @@ export async function setInitialPassword(
 
   const admin = createAdminClient();
   const { error: pwError } = await admin.auth.admin.updateUserById(row.user_id, { password });
-  if (pwError) return { error: "update-failed" };
+  if (pwError) {
+    console.error("[setInitialPassword] updateUserById:", pwError.message, pwError.status);
+    return { error: "update-failed" };
+  }
 
   await admin
     .from("profiles")
