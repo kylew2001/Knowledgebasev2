@@ -1,29 +1,44 @@
+"use client";
+
+import { useState } from "react";
 import {
   Activity,
   Database,
   KeyRound,
   Lock,
+  Pencil,
   RotateCcw,
   ShieldCheck,
   UserPlus,
   Users
 } from "lucide-react";
-import { auditEvents, users } from "@/lib/mock-data";
+import { auditEvents } from "@/lib/mock-data";
+import { type AdminUser } from "@/app/(app)/admin/actions";
+import EditUserModal from "@/components/EditUserModal";
 
-export function AdminDashboard() {
+type Props = { users: AdminUser[] };
+
+export function AdminDashboard({ users: initialUsers }: Props) {
+  const [users, setUsers] = useState(initialUsers);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+
+  function handleSaved(userId: string, updated: Partial<AdminUser>) {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updated } : u)));
+  }
+
+  const lockedCount = users.filter((u) => u.disabled_at).length;
+
   return (
     <div className="space-y-6">
       <header className="rounded-lg border border-line bg-white p-5 shadow-soft">
         <p className="text-sm font-semibold text-brand">Super Admin</p>
-        <h2 className="mt-1 text-3xl font-bold tracking-normal text-ink">
-          Admin dashboard
-        </h2>
+        <h2 className="mt-1 text-3xl font-bold tracking-normal text-ink">Admin dashboard</h2>
       </header>
 
       <section className="grid gap-3 md:grid-cols-4">
         {[
-          { label: "Users", value: "3", icon: Users },
-          { label: "Locked Accounts", value: "1", icon: Lock },
+          { label: "Users", value: String(users.length), icon: Users },
+          { label: "Locked Accounts", value: String(lockedCount), icon: Lock },
           { label: "Audit Events", value: "128", icon: Activity },
           { label: "Storage Used", value: "214 MB", icon: Database }
         ].map((stat) => {
@@ -60,10 +75,11 @@ export function AdminDashboard() {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.email}>
+                  <tr key={user.id}>
                     <td className="border-b border-line px-3 py-3">
-                      <p className="font-semibold text-ink">{user.name}</p>
+                      <p className="font-semibold text-ink">{user.display_name || user.username || "—"}</p>
                       <p className="text-slate-500">{user.email}</p>
+                      {user.username && <p className="text-xs text-slate-400">@{user.username}</p>}
                     </td>
                     <td className="border-b border-line px-3 py-3">
                       <select className="focus-ring rounded-lg border border-line bg-white px-3 py-2">
@@ -74,21 +90,22 @@ export function AdminDashboard() {
                       </select>
                     </td>
                     <td className="border-b border-line px-3 py-3">
-                      <span
-                        className={`rounded-md px-2 py-1 text-xs font-bold ${
-                          user.status === "Active"
-                            ? "bg-teal-50 text-teal-800"
-                            : "bg-amber-50 text-amber-800"
-                        }`}
-                      >
-                        {user.status}
+                      <span className={`rounded-md px-2 py-1 text-xs font-bold ${user.disabled_at ? "bg-amber-50 text-amber-800" : "bg-teal-50 text-teal-800"}`}>
+                        {user.disabled_at ? "Disabled" : "Active"}
                       </span>
                     </td>
                     <td className="border-b border-line px-3 py-3 text-slate-600">
-                      {user.lastLogin}
+                      {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Never"}
                     </td>
                     <td className="border-b border-line px-3 py-3">
                       <div className="flex gap-2">
+                        <button
+                          title="Edit user"
+                          onClick={() => setEditingUser(user)}
+                          className="focus-ring rounded-lg border border-line p-2 hover:bg-panel"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
                         <button title="Send password reset" className="focus-ring rounded-lg border border-line p-2 hover:bg-panel">
                           <KeyRound className="h-4 w-4" />
                         </button>
@@ -111,34 +128,16 @@ export function AdminDashboard() {
           <h3 className="text-lg font-bold text-ink">Security controls</h3>
           <div className="mt-4 space-y-4">
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">
-                Failed login threshold
-              </span>
-              <input
-                type="number"
-                defaultValue={5}
-                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
-              />
+              <span className="text-sm font-semibold text-slate-700">Failed login threshold</span>
+              <input type="number" defaultValue={5} className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3" />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">
-                Lockout duration minutes
-              </span>
-              <input
-                type="number"
-                defaultValue={15}
-                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
-              />
+              <span className="text-sm font-semibold text-slate-700">Lockout duration minutes</span>
+              <input type="number" defaultValue={15} className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3" />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">
-                Inactivity timeout minutes
-              </span>
-              <input
-                type="number"
-                defaultValue={30}
-                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
-              />
+              <span className="text-sm font-semibold text-slate-700">Inactivity timeout minutes</span>
+              <input type="number" defaultValue={30} className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3" />
             </label>
           </div>
           <button className="focus-ring mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
@@ -167,6 +166,14 @@ export function AdminDashboard() {
           ))}
         </div>
       </section>
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={(updated) => { handleSaved(editingUser.id, updated); setEditingUser(null); }}
+        />
+      )}
     </div>
   );
 }

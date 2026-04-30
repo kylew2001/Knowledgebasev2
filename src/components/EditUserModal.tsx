@@ -1,0 +1,92 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { X } from "lucide-react";
+import { updateUser, type AdminUser } from "@/app/(app)/admin/actions";
+
+type Props = {
+  user: AdminUser;
+  onClose: () => void;
+  onSaved: (updated: Partial<AdminUser>) => void;
+};
+
+export default function EditUserModal({ user, onClose, onSaved }: Props) {
+  const [displayName, setDisplayName] = useState(user.display_name ?? "");
+  const [username, setUsername] = useState(user.username ?? "");
+  const [email, setEmail] = useState(user.email);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const result = await updateUser(user.id, { display_name: displayName, username, email });
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      onSaved({ display_name: displayName, username, email });
+      onClose();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-lg border border-line bg-white p-6 shadow-soft">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-ink">Edit user</h2>
+          <button onClick={onClose} className="rounded-lg p-1 hover:bg-panel">
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Display name</span>
+            <input
+              autoFocus
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Username</span>
+            <input
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Email</span>
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+            />
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={isPending}
+              className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
+            >
+              {isPending ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
