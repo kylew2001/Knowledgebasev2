@@ -12,7 +12,7 @@ async function lookupByUsername(username: string): Promise<LookupRow | null> {
     .rpc("lookup_user_by_username", { p_username: username.toLowerCase().trim() })
     .maybeSingle();
   if (error) console.error("[lookupByUsername]", error.message, error.code);
-  return data ?? null;
+  return (data as LookupRow) ?? null;
 }
 
 export async function checkUsername(
