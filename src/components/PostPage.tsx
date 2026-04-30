@@ -1,20 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   AlertTriangle,
+  Bold,
   BookOpen,
   ChevronRight,
   FileText,
   Home,
   Image as ImageIcon,
   Info,
+  Italic,
+  List,
+  ListOrdered,
   Minus,
+  Palette,
   PenLine,
   Pencil,
   Plus,
   Save,
   Trash2,
+  Type,
+  Underline,
   X
 } from "lucide-react";
 import { type MockPost } from "@/lib/mock-data";
@@ -23,7 +30,17 @@ import { derivePostType } from "@/lib/post-content";
 
 // ── Widget types ────────────────────────────────────────────────────────────
 
-type TextWidget    = { id: string; type: "text";    content: string };
+type TextWidget = {
+  id: string;
+  type: "text";
+  content: string;
+  fontSize?: string;
+  fontFamily?: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+};
 type ImageWidget   = { id: string; type: "image";   src: string; caption: string };
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
 type CalloutWidget = { id: string; type: "callout"; variant: "info" | "warning" | "success"; content: string };
@@ -69,7 +86,7 @@ const widgetTypes = [
 
 function blankWidget(type: Widget["type"]): Widget {
   switch (type) {
-    case "text":    return { id: newId(), type: "text", content: "" };
+    case "text":    return { id: newId(), type: "text", content: "", fontSize: "16px", fontFamily: "Inter, system-ui, sans-serif", color: "#334155" };
     case "image":   return { id: newId(), type: "image", src: "", caption: "" };
     case "pdf":     return { id: newId(), type: "pdf", filename: "" };
     case "callout": return { id: newId(), type: "callout", variant: "info", content: "" };
@@ -108,17 +125,128 @@ function AddWidgetBar({ onAdd }: { onAdd: (w: Widget) => void }) {
 // ── Individual widget renderers ──────────────────────────────────────────────
 
 function TextWidgetView({ w }: { w: TextWidget }) {
+  const textStyle: CSSProperties = {
+    color: w.color ?? "#334155",
+    fontFamily: w.fontFamily ?? "Inter, system-ui, sans-serif",
+    fontSize: w.fontSize ?? "16px",
+    fontWeight: w.bold ? 700 : 400,
+    fontStyle: w.italic ? "italic" : "normal",
+    textDecoration: w.underline ? "underline" : "none"
+  };
+
   return (
-    <div className="prose prose-sm max-w-none text-slate-700">
+    <div className="prose prose-sm max-w-none" style={textStyle}>
       {w.content.split("\n").map((line, i) => {
         const bold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-        if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-bold text-ink">{line.slice(3)}</h2>;
-        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold text-ink" dangerouslySetInnerHTML={{ __html: bold }} />;
+        if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-bold" style={textStyle}>{line.slice(3)}</h2>;
+        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold" style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
         if (line.startsWith("- [ ]")) return <li key={i} className="ml-4 list-none text-slate-600">☐ {line.slice(5)}</li>;
-        if (line.match(/^\d+\./)) return <li key={i} className="ml-4 list-decimal text-slate-600" dangerouslySetInnerHTML={{ __html: bold }} />;
+        if (line.startsWith("- ")) return <li key={i} className="ml-5 list-disc" style={textStyle}>{line.slice(2)}</li>;
+        if (line.match(/^\d+\./)) return <li key={i} className="ml-5 list-decimal" style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
         if (line === "") return <br key={i} />;
-        return <p key={i} className="text-slate-700" dangerouslySetInnerHTML={{ __html: bold }} />;
+        return <p key={i} style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
       })}
+    </div>
+  );
+}
+
+function TextWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: TextWidget;
+  onChange: (widget: TextWidget) => void;
+}) {
+  function update(patch: Partial<TextWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  function insertListPrefix(prefix: "- " | "1. ") {
+    const lines = widget.content ? widget.content.split("\n") : [""];
+    const next = lines.map((line, index) => {
+      if (!line.trim()) return prefix === "1. " ? `${index + 1}. ` : "- ";
+      if (line.startsWith("- ") || line.match(/^\d+\.\s/)) return line;
+      return prefix === "1. " ? `${index + 1}. ${line}` : `- ${line}`;
+    });
+    update({ content: next.join("\n") });
+  }
+
+  const activeButton = "border-brand bg-teal-50 text-brand";
+  const inactiveButton = "border-line bg-white text-slate-600 hover:bg-mist";
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-panel p-2">
+        <label className="flex h-8 items-center gap-1.5 rounded-lg border border-line bg-white px-2 text-xs font-semibold text-slate-600">
+          <Type className="h-3.5 w-3.5" />
+          <select
+            value={widget.fontFamily ?? "Inter, system-ui, sans-serif"}
+            onChange={(e) => update({ fontFamily: e.target.value })}
+            className="bg-transparent outline-none"
+          >
+            <option value="Inter, system-ui, sans-serif">Default</option>
+            <option value="Arial, Helvetica, sans-serif">Arial</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', Times, serif">Times</option>
+            <option value="'Courier New', monospace">Courier</option>
+          </select>
+        </label>
+
+        <select
+          value={widget.fontSize ?? "16px"}
+          onChange={(e) => update({ fontSize: e.target.value })}
+          className="focus-ring h-8 rounded-lg border border-line bg-white px-2 text-xs font-semibold text-slate-600"
+        >
+          <option value="13px">Small</option>
+          <option value="16px">Normal</option>
+          <option value="20px">Large</option>
+          <option value="26px">Heading</option>
+          <option value="32px">Title</option>
+        </select>
+
+        <button type="button" title="Bold" onClick={() => update({ bold: !widget.bold })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.bold ? activeButton : inactiveButton}`}>
+          <Bold className="mx-auto h-4 w-4" />
+        </button>
+        <button type="button" title="Italic" onClick={() => update({ italic: !widget.italic })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.italic ? activeButton : inactiveButton}`}>
+          <Italic className="mx-auto h-4 w-4" />
+        </button>
+        <button type="button" title="Underline" onClick={() => update({ underline: !widget.underline })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.underline ? activeButton : inactiveButton}`}>
+          <Underline className="mx-auto h-4 w-4" />
+        </button>
+
+        <button type="button" title="Bullet list" onClick={() => insertListPrefix("- ")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
+          <List className="mx-auto h-4 w-4" />
+        </button>
+        <button type="button" title="Numbered list" onClick={() => insertListPrefix("1. ")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
+          <ListOrdered className="mx-auto h-4 w-4" />
+        </button>
+
+        <label title="Text colour" className="flex h-8 items-center gap-1 rounded-lg border border-line bg-white px-2 text-slate-600 hover:bg-mist">
+          <Palette className="h-4 w-4" />
+          <input
+            type="color"
+            value={widget.color ?? "#334155"}
+            onChange={(e) => update({ color: e.target.value })}
+            className="h-5 w-6 cursor-pointer border-0 bg-transparent p-0"
+          />
+        </label>
+      </div>
+
+      <textarea
+        value={widget.content}
+        onChange={(e) => update({ content: e.target.value })}
+        rows={8}
+        placeholder="Write your content here... Use the toolbar for font, size, colour, bold, italic, underline, and lists."
+        className="focus-ring w-full rounded-lg border border-line px-3 py-2 text-sm"
+        style={{
+          color: widget.color ?? "#334155",
+          fontFamily: widget.fontFamily ?? "Inter, system-ui, sans-serif",
+          fontSize: widget.fontSize ?? "16px",
+          fontWeight: widget.bold ? 700 : 400,
+          fontStyle: widget.italic ? "italic" : "normal",
+          textDecoration: widget.underline ? "underline" : "none"
+        }}
+      />
     </div>
   );
 }
@@ -271,13 +399,7 @@ export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets 
               <div className={editing ? "p-3" : "py-3"}>
                 {widget.type === "text" && !editing && <TextWidgetView w={widget} />}
                 {widget.type === "text" && editing && (
-                  <textarea
-                    value={widget.content}
-                    onChange={(e) => updateWidget({ ...widget, content: e.target.value })}
-                    rows={6}
-                    placeholder="Write your content here… (use **bold**, ## Heading, - [ ] checklist)"
-                    className="focus-ring w-full rounded-lg border border-line px-3 py-2 font-mono text-sm"
-                  />
+                  <TextWidgetEditor widget={widget} onChange={updateWidget} />
                 )}
 
                 {widget.type === "callout" && !editing && <CalloutView w={widget} />}

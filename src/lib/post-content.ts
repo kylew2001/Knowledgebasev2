@@ -1,6 +1,16 @@
 import { type PostType } from "@/lib/mock-data";
 
-export type TextWidget = { id: string; type: "text"; content: string };
+export type TextWidget = {
+  id: string;
+  type: "text";
+  content: string;
+  fontSize?: string;
+  fontFamily?: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+};
 export type ImageWidget = { id: string; type: "image"; src: string; caption: string };
 export type PdfWidget = { id: string; type: "pdf"; filename: string };
 export type CalloutWidget = {
