@@ -18,6 +18,16 @@ function isStrong(p: string) {
   return PASSWORD_RULES.every((r) => r.test(p));
 }
 
+function parseSignInError(result: { error: string; lockoutMinutes?: number }): string {
+  if (result.error === "account-disabled")
+    return "Your account has been disabled. Please contact an administrator.";
+  if (result.error === "account-locked") {
+    const mins = result.lockoutMinutes ?? 0;
+    return `Account locked after too many failed attempts. Try again in ${mins} minute${mins !== 1 ? "s" : ""}.`;
+  }
+  return "Incorrect password. Please try again.";
+}
+
 export default function LoginForm() {
   const [step, setStep] = useState<Step>("username");
   const [username, setUsername] = useState("");
@@ -53,7 +63,7 @@ export default function LoginForm() {
     setError(null);
     startTransition(async () => {
       const result = await signInWithUsername(username.trim(), password);
-      if (result?.error) setError("Incorrect password. Please try again.");
+      if (result?.error) setError(parseSignInError(result));
     });
   }
 
@@ -134,7 +144,11 @@ export default function LoginForm() {
               </button>
             </div>
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className={`text-sm ${error.includes("locked") || error.includes("disabled") ? "text-amber-700" : "text-red-600"}`}>
+              {error}
+            </p>
+          )}
           <button
             disabled={isPending}
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"

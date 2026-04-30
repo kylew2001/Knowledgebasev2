@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpenText, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { InactivityGuard } from "@/components/InactivityGuard";
 
 type AppShellProps = {
   children: React.ReactNode;
   userRole?: "super_admin" | "editor" | "viewer";
+  inactivityTimeout?: number;
 };
 
-export function AppShell({ children, userRole = "super_admin" }: AppShellProps) {
+export function AppShell({ children, userRole = "super_admin", inactivityTimeout = 30 }: AppShellProps) {
   const pathname = usePathname();
 
   const navItems = [
@@ -72,6 +74,7 @@ export function AppShell({ children, userRole = "super_admin" }: AppShellProps) 
       <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">{children}</div>
       </main>
+      <InactivityGuard timeoutMinutes={inactivityTimeout} />
     </div>
   );
 }
