@@ -11,3 +11,4 @@ as $$
   where lower(p.username) = lower(trim(p_username))
   limit 1;
 $$;
+-- trigger
