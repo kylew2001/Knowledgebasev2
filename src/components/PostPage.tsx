@@ -153,7 +153,17 @@ const typeConfig = {
 } as const;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
+  if (type === "pdf" || type === "written" || type === "both") {
+    return typeConfig[type];
+  }
+
+  return typeConfig.written;
 }
 
 export function PostPage({ post, userRole, onBack, categoryTitle }: Props) {
@@ -178,7 +188,7 @@ export function PostPage({ post, userRole, onBack, categoryTitle }: Props) {
     setDraft((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
   }
 
-  const cfg = typeConfig[post.type as PostType];
+  const cfg = getTypeConfig(post.type as PostType);
   const TypeIcon = cfg.icon;
   const current = editing ? draft : widgets;
 
@@ -194,13 +204,13 @@ export function PostPage({ post, userRole, onBack, categoryTitle }: Props) {
             <ChevronRight className="h-3 w-3" />
             <span>{post.subcategory}</span>
           </div>
-          <h2 className="text-2xl font-bold text-ink">{post.title}</h2>
+          <h2 className="text-2xl font-bold text-ink">{post.title || "Untitled post"}</h2>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${cfg.bg} ${cfg.fg}`}>
               <TypeIcon className="h-3.5 w-3.5" />
               {cfg.label}
             </span>
-            <span className="text-xs text-slate-400">{post.publishedBy} · {formatDate(post.publishedAt)}</span>
+            <span className="text-xs text-slate-400">{post.publishedBy || "Unknown"} · {formatDate(post.publishedAt)}</span>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
