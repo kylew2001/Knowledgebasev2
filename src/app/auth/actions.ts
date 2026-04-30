@@ -2,20 +2,82 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function signIn(formData: FormData) {
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
+export async function checkUsername(
+  username: string
+): Promise<{ found: boolean; requiresPasswordSet: boolean }> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("profiles")
+    .select("force_password_change")
+    .eq("username", username.toLowerCase().trim())
+    .maybeSingle();
+
+  if (!data) return { found: false, requiresPasswordSet: false };
+  return { found: true, requiresPasswordSet: data.force_password_change };
+}
+
+export async function signInWithUsername(
+  username: string,
+  password: string
+): Promise<{ error: string } | null> {
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("username", username.toLowerCase().trim())
+    .maybeSingle();
+
+  if (!profile) return { error: "invalid-credentials" };
+
+  const {
+    data: { user }
+  } = await admin.auth.admin.getUserById(profile.id);
+  if (!user?.email) return { error: "invalid-credentials" };
+
   const supabase = await createClient();
-
   const { error } = await supabase.auth.signInWithPassword({
-    email,
+    email: user.email,
     password
   });
+  if (error) return { error: "invalid-credentials" };
 
-  if (error) {
-    redirect("/login?error=invalid-credentials");
-  }
+  redirect("/knowledge-base");
+}
+
+export async function setInitialPassword(
+  username: string,
+  password: string
+): Promise<{ error: string } | null> {
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, force_password_change")
+    .eq("username", username.toLowerCase().trim())
+    .maybeSingle();
+
+  if (!profile?.force_password_change) return { error: "not-allowed" };
+
+  const { error: pwError } = await admin.auth.admin.updateUserById(profile.id, { password });
+  if (pwError) return { error: "update-failed" };
+
+  await admin
+    .from("profiles")
+    .update({ force_password_change: false })
+    .eq("id", profile.id);
+
+  const {
+    data: { user }
+  } = await admin.auth.admin.getUserById(profile.id);
+  if (!user?.email) return { error: "invalid-credentials" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password
+  });
+  if (error) return { error: "sign-in-failed" };
 
   redirect("/knowledge-base");
 }
