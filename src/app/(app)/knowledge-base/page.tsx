@@ -1,5 +1,8 @@
 import { KnowledgeBase } from "@/components/knowledge-base";
+import { getCurrentProfile } from "@/lib/auth";
 
-export default function KnowledgeBasePage() {
-  return <KnowledgeBase />;
+export default async function KnowledgeBasePage() {
+  const current = await getCurrentProfile();
+  const role = current?.profile.role ?? "viewer";
+  return <KnowledgeBase userRole={role} />;
 }

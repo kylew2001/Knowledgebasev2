@@ -6,6 +6,7 @@ import { categoryCards, mockPosts, type MockPost } from "@/lib/mock-data";
 import CardBuilderModal from "@/components/CardBuilderModal";
 import SubCategoryModal from "@/components/SubCategoryModal";
 import NewPostModal from "@/components/NewPostModal";
+import PostPage from "@/components/PostPage";
 
 type Category = (typeof categoryCards)[number] & { subcategories: string[] };
 
@@ -21,18 +22,19 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function KnowledgeBase() {
+export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [posts, setPosts] = useState<MockPost[]>(mockPosts);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
+  const [selectedPost, setSelectedPost] = useState<MockPost | null>(null);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showSubCategory, setShowSubCategory] = useState(false);
   const [showNewPost, setShowNewPost] = useState(false);
   const [search, setSearch] = useState("");
 
-  function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); }
-  function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); }
+  function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); }
+  function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); setSelectedPost(null); }
 
   function handleAddSubCategory(name: string) {
     if (!selectedCategory) return;
@@ -57,6 +59,17 @@ export function KnowledgeBase() {
     level === 2 ? selectedSubcategory!
     : level === 1 ? selectedCategory!.title
     : "IT support articles, PDFs, and runbooks";
+
+  if (selectedPost && selectedCategory) {
+    return (
+      <PostPage
+        post={selectedPost}
+        userRole={userRole as import("@/lib/auth").UserRole}
+        categoryTitle={selectedCategory.title}
+        onBack={() => setSelectedPost(null)}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -183,7 +196,7 @@ export function KnowledgeBase() {
             const cfg = typeConfig[post.type];
             const TypeIcon = cfg.icon;
             return (
-              <button key={post.id} className="focus-ring rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel">
+              <button key={post.id} onClick={() => setSelectedPost(post)} className="focus-ring rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${cfg.bg}`}>
                     <TypeIcon className={`h-6 w-6 ${cfg.fg}`} />
