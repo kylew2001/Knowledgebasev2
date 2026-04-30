@@ -45,6 +45,10 @@ function getStoredPostType(widgets: import("@/lib/post-content").Widget[]) {
   return derivedType === "empty" ? undefined : derivedType;
 }
 
+function getCategoryResourceCount(posts: MockPost[], categoryTitle: string) {
+  return posts.filter((post) => post.category === categoryTitle).length;
+}
+
 // ── Edit-category modal ──────────────────────────────────────────────────────
 
 type EditCategoryModalProps = {
@@ -56,6 +60,7 @@ type EditCategoryModalProps = {
 function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps) {
   const [title, setTitle] = useState(category.title);
   const [description, setDescription] = useState(category.description);
+  const [tagsText, setTagsText] = useState(category.tags.join(", "));
   const [color, setColor] = useState(category.color);
   const [iconName, setIconName] = useState(
     iconOptions.find((o) => o.icon === category.icon)?.name ?? iconOptions[0].name
@@ -65,7 +70,11 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
     e.preventDefault();
     if (!title.trim()) return;
     const selectedIcon = iconOptions.find((o) => o.name === iconName)?.icon ?? category.icon;
-    onSave({ title: title.trim(), description: description.trim(), color, icon: selectedIcon });
+    const tags = tagsText
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    onSave({ title: title.trim(), description: description.trim(), tags, color, icon: selectedIcon });
     onClose();
   }
 
@@ -88,6 +97,18 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
             <span className="text-sm font-semibold text-slate-700">Description</span>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
               className="focus-ring mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm" />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Tags</span>
+            <input
+              value={tagsText}
+              onChange={(e) => setTagsText(e.target.value)}
+              placeholder="Exchange, Teams, Licensing"
+              className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+            />
+            <span className="mt-1 block text-xs text-slate-400">
+              Separate tags with commas.
+            </span>
           </label>
           <div>
             <span className="text-sm font-semibold text-slate-700">Icon</span>
@@ -117,7 +138,20 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
             <span className="flex h-10 w-10 items-center justify-center rounded-lg text-white" style={{ backgroundColor: color }}>
               <PreviewIcon className="h-5 w-5" />
             </span>
-            <span className="text-sm font-semibold text-ink">{title || "Category name"}</span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">{title || "Category name"}</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {tagsText
+                  .split(",")
+                  .map((tag) => tag.trim())
+                  .filter(Boolean)
+                  .map((tag) => (
+                    <span key={tag} className="rounded-md bg-mist px-2 py-0.5 text-xs font-semibold text-slate-600">
+                      {tag}
+                    </span>
+                  ))}
+              </div>
+            </div>
           </div>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel">Cancel</button>
@@ -209,6 +243,13 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
     const next = categories.map((c) =>
       c.title === oldTitle ? { ...c, ...updated } : c
     );
+    if (updated.title && updated.title !== oldTitle) {
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.category === oldTitle ? { ...post, category: updated.title! } : post
+        )
+      );
+    }
     setCategories(next);
     if (selectedCategory?.title === oldTitle) {
       setSelectedCategory(next.find((c) => c.title === (updated.title ?? oldTitle)) ?? null);
@@ -312,6 +353,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {categories.map((category) => {
             const Icon = category.icon;
+            const resourceCount = getCategoryResourceCount(posts, category.title);
             return (
               <div key={category.title} className="relative">
                 <button onClick={() => goCategory(category)} className="focus-ring w-full rounded-lg border border-line bg-white p-4 pr-12 text-left transition hover:border-slate-300 hover:bg-panel">
@@ -328,7 +370,9 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                       <span key={tag} className="rounded-md bg-mist px-2 py-1 text-xs font-semibold text-slate-600">{tag}</span>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs font-semibold text-slate-500">{category.count} resources</p>
+                  <p className="mt-4 text-xs font-semibold text-slate-500">
+                    {resourceCount} resource{resourceCount !== 1 ? "s" : ""}
+                  </p>
                 </button>
                 {canEdit && (
                   <button
