@@ -8,12 +8,16 @@ export async function checkUsername(
   username: string
 ): Promise<{ found: boolean; requiresPasswordSet: boolean }> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("force_password_change")
     .eq("username", username.toLowerCase().trim())
     .maybeSingle();
 
+  if (error) {
+    console.error("[checkUsername] query error:", error.message, error.code);
+    return { found: false, requiresPasswordSet: false };
+  }
   if (!data) return { found: false, requiresPasswordSet: false };
   return { found: true, requiresPasswordSet: data.force_password_change };
 }
