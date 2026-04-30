@@ -302,7 +302,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                 {canEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingCategory(category); }}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                    className="absolute right-2 top-2 z-10 rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm hover:bg-slate-50 hover:text-ink"
                     title="Edit category"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -347,7 +347,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                 {canEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingSubcategory(name); }}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                    className="absolute right-2 top-2 z-10 rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm hover:bg-slate-50 hover:text-ink"
                     title="Edit subcategory"
                   >
                     <Pencil className="h-3.5 w-3.5" />
