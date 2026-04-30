@@ -181,9 +181,10 @@ export type MockPost = {
   title: string;
   publishedBy: string;
   publishedAt: string;
-  type: PostType;
+  type?: PostType;
   subcategory: string;
   category: string;
+  widgets?: import("@/lib/post-content").Widget[];
 };
 
 export const mockPosts: MockPost[] = [

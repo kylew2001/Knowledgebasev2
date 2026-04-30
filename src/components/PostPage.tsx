@@ -17,8 +17,9 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { type MockPost, type PostType } from "@/lib/mock-data";
+import { type MockPost } from "@/lib/mock-data";
 import { type UserRole } from "@/lib/auth";
+import { derivePostType } from "@/lib/post-content";
 
 // ── Widget types ────────────────────────────────────────────────────────────
 
@@ -144,12 +145,14 @@ type Props = {
   userRole: UserRole;
   onBack: () => void;
   categoryTitle: string;
+  onSaveWidgets?: (widgets: Widget[]) => void;
 };
 
 const typeConfig = {
   pdf:     { label: "PDF",     icon: FileText, bg: "bg-orange-50", fg: "text-orange-600" },
   written: { label: "Written", icon: PenLine,  bg: "bg-blue-50",   fg: "text-blue-600"   },
   both:    { label: "Both",    icon: BookOpen,  bg: "bg-teal-50",   fg: "text-teal-700"   },
+  empty:   { label: "Empty",   icon: BookOpen,  bg: "bg-slate-100", fg: "text-slate-500"  },
 } as const;
 
 function formatDate(iso: string) {
@@ -159,22 +162,26 @@ function formatDate(iso: string) {
 }
 
 function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
-  if (type === "pdf" || type === "written" || type === "both") {
+  if (type === "pdf" || type === "written" || type === "both" || type === "empty") {
     return typeConfig[type];
   }
 
   return typeConfig.written;
 }
 
-export function PostPage({ post, userRole, onBack, categoryTitle }: Props) {
+export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets }: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const [editing, setEditing] = useState(false);
-  const [widgets, setWidgets] = useState<Widget[]>(defaultContent[post.id] ?? []);
+  const [widgets, setWidgets] = useState<Widget[]>(post.widgets ?? defaultContent[post.id] ?? []);
   const [draft, setDraft] = useState<Widget[]>(widgets);
 
   function startEdit() { setDraft(widgets); setEditing(true); }
   function cancelEdit() { setEditing(false); }
-  function saveEdit() { setWidgets(draft); setEditing(false); }
+  function saveEdit() {
+    setWidgets(draft);
+    onSaveWidgets?.(draft);
+    setEditing(false);
+  }
 
   function insertWidget(w: Widget, afterIndex: number) {
     setDraft((prev) => [...prev.slice(0, afterIndex + 1), w, ...prev.slice(afterIndex + 1)]);
@@ -188,9 +195,10 @@ export function PostPage({ post, userRole, onBack, categoryTitle }: Props) {
     setDraft((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
   }
 
-  const cfg = getTypeConfig(post.type as PostType);
-  const TypeIcon = cfg.icon;
   const current = editing ? draft : widgets;
+  const derivedType = derivePostType(current);
+  const cfg = getTypeConfig(derivedType);
+  const TypeIcon = cfg.icon;
 
   return (
     <div className="space-y-6">

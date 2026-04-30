@@ -7,6 +7,7 @@ import CardBuilderModal from "@/components/CardBuilderModal";
 import SubCategoryModal from "@/components/SubCategoryModal";
 import NewPostModal from "@/components/NewPostModal";
 import { PostPage } from "@/components/PostPage";
+import { derivePostType, getPostWidgets } from "@/lib/post-content";
 
 type Category = (typeof categoryCards)[number] & { subcategories: string[] };
 
@@ -15,7 +16,8 @@ const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
 const typeConfig = {
   pdf:     { label: "PDF",     icon: FileText, bg: "bg-orange-50", fg: "text-orange-600" },
   written: { label: "Written", icon: PenLine,  bg: "bg-blue-50",   fg: "text-blue-600"   },
-  both:    { label: "Both",    icon: BookOpen,  bg: "bg-teal-50",   fg: "text-teal-700"   }
+  both:    { label: "Both",    icon: BookOpen,  bg: "bg-teal-50",   fg: "text-teal-700"   },
+  empty:   { label: "Empty",   icon: BookOpen,  bg: "bg-slate-100", fg: "text-slate-500"  }
 } as const;
 
 const COLORS = [
@@ -31,11 +33,16 @@ function formatDate(iso: string) {
 }
 
 function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
-  if (type === "pdf" || type === "written" || type === "both") {
+  if (type === "pdf" || type === "written" || type === "both" || type === "empty") {
     return typeConfig[type];
   }
 
   return typeConfig.written;
+}
+
+function getStoredPostType(widgets: import("@/lib/post-content").Widget[]) {
+  const derivedType = derivePostType(widgets);
+  return derivedType === "empty" ? undefined : derivedType;
 }
 
 // ── Edit-category modal ──────────────────────────────────────────────────────
@@ -225,6 +232,19 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
     setPosts((prev) => [post, ...prev]);
   }
 
+  function handleSavePostWidgets(postId: string, widgets: import("@/lib/post-content").Widget[]) {
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId ? { ...post, widgets, type: getStoredPostType(widgets) } : post
+      )
+    );
+    setSelectedPost((current) =>
+      current?.id === postId
+        ? { ...current, widgets, type: getStoredPostType(widgets) }
+        : current
+    );
+  }
+
   const subcategoryPosts = posts.filter(
     (p) => p.category === selectedCategory?.title && p.subcategory === selectedSubcategory
   );
@@ -243,6 +263,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
         userRole={userRole as import("@/lib/auth").UserRole}
         categoryTitle={selectedCategory.title}
         onBack={() => setSelectedPost(null)}
+        onSaveWidgets={(widgets) => handleSavePostWidgets(selectedPost.id, widgets)}
       />
     );
   }
@@ -392,7 +413,8 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
           )}
 
           {subcategoryPosts.map((post) => {
-            const cfg = getTypeConfig(post.type);
+            const derivedType = derivePostType(getPostWidgets(post));
+            const cfg = getTypeConfig(derivedType);
             const TypeIcon = cfg.icon;
             return (
               <button key={post.id} type="button" onClick={() => setSelectedPost(post)} className="focus-ring rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel">
