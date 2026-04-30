@@ -282,7 +282,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
           {categories.map((category) => {
             const Icon = category.icon;
             return (
-              <div key={category.title} className="group relative">
+              <div key={category.title} className="relative">
                 <button onClick={() => goCategory(category)} className="focus-ring w-full rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel">
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <span className="flex h-11 w-11 items-center justify-center rounded-lg text-white" style={{ backgroundColor: category.color }}>
@@ -302,7 +302,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                 {canEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingCategory(category); }}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-ink group-hover:opacity-100"
+                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
                     title="Edit category"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -332,7 +332,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
             const Icon = selectedCategory.icon;
             const count = posts.filter((p) => p.category === selectedCategory.title && p.subcategory === name).length;
             return (
-              <div key={name} className="group relative">
+              <div key={name} className="relative">
                 <button onClick={() => setSelectedSubcategory(name)} className="focus-ring w-full rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel">
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <span className="flex h-11 w-11 items-center justify-center rounded-lg text-white" style={{ backgroundColor: selectedCategory.color }}>
@@ -347,7 +347,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                 {canEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingSubcategory(name); }}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-100 hover:text-ink group-hover:opacity-100"
+                    className="absolute right-2 top-2 rounded-md p-1.5 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
                     title="Edit subcategory"
                   >
                     <Pencil className="h-3.5 w-3.5" />
