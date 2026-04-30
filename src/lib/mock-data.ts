@@ -174,6 +174,46 @@ export const categoryCards = [
   }
 ];
 
+export type PostType = "pdf" | "written" | "both";
+
+export type MockPost = {
+  id: string;
+  title: string;
+  publishedBy: string;
+  publishedAt: string;
+  type: PostType;
+  subcategory: string;
+  category: string;
+};
+
+export const mockPosts: MockPost[] = [
+  // Microsoft 365 – Shared Mailboxes
+  { id: "1", title: "How to create a shared mailbox in Exchange Admin", publishedBy: "Kyle W", publishedAt: "2026-04-15", type: "written", subcategory: "Shared Mailboxes", category: "Microsoft 365" },
+  { id: "2", title: "Granting full access to a shared mailbox", publishedBy: "Kyle W", publishedAt: "2026-04-10", type: "pdf", subcategory: "Shared Mailboxes", category: "Microsoft 365" },
+  { id: "3", title: "Shared mailbox not showing in Outlook – fix guide", publishedBy: "Service Desk", publishedAt: "2026-03-28", type: "both", subcategory: "Shared Mailboxes", category: "Microsoft 365" },
+  // Microsoft 365 – Teams Setup
+  { id: "4", title: "Setting up a new Teams channel and permissions", publishedBy: "Kyle W", publishedAt: "2026-04-18", type: "written", subcategory: "Teams Setup", category: "Microsoft 365" },
+  { id: "5", title: "Teams guest access configuration guide", publishedBy: "Service Desk", publishedAt: "2026-04-02", type: "pdf", subcategory: "Teams Setup", category: "Microsoft 365" },
+  // Active Directory – Password Resets
+  { id: "6", title: "Self-service password reset setup for end users", publishedBy: "Kyle W", publishedAt: "2026-04-20", type: "written", subcategory: "Password Resets", category: "Active Directory" },
+  { id: "7", title: "Admin password reset procedure – AD Users & Computers", publishedBy: "Service Desk", publishedAt: "2026-04-05", type: "both", subcategory: "Password Resets", category: "Active Directory" },
+  // Active Directory – New User Setup
+  { id: "8", title: "New starter onboarding checklist", publishedBy: "Kyle W", publishedAt: "2026-04-22", type: "pdf", subcategory: "New User Setup", category: "Active Directory" },
+  { id: "9", title: "Creating a new AD user and assigning groups", publishedBy: "Kyle W", publishedAt: "2026-04-01", type: "written", subcategory: "New User Setup", category: "Active Directory" },
+  // Networking – VPN Troubleshooting
+  { id: "10", title: "FortiClient VPN connection drops – common fixes", publishedBy: "Service Desk", publishedAt: "2026-04-12", type: "written", subcategory: "VPN Troubleshooting", category: "Networking" },
+  { id: "11", title: "VPN split tunnelling configuration guide", publishedBy: "Kyle W", publishedAt: "2026-03-30", type: "pdf", subcategory: "VPN Troubleshooting", category: "Networking" },
+  // Endpoints – Laptop Builds
+  { id: "12", title: "Standard laptop build process with Intune Autopilot", publishedBy: "Kyle W", publishedAt: "2026-04-19", type: "both", subcategory: "Laptop Builds", category: "Endpoints" },
+  { id: "13", title: "Pre-build BIOS checklist", publishedBy: "Service Desk", publishedAt: "2026-03-15", type: "pdf", subcategory: "Laptop Builds", category: "Endpoints" },
+  // Telephony – 3CX Setup
+  { id: "14", title: "3CX softphone installation on Windows", publishedBy: "Kyle W", publishedAt: "2026-04-08", type: "both", subcategory: "3CX Setup", category: "Telephony" },
+  { id: "15", title: "Provisioning a new extension in 3CX", publishedBy: "Kyle W", publishedAt: "2026-03-22", type: "written", subcategory: "3CX Setup", category: "Telephony" },
+  // Phoenix – User Access
+  { id: "16", title: "Requesting new Phoenix ERP user access", publishedBy: "Kyle W", publishedAt: "2026-04-16", type: "written", subcategory: "User Access", category: "Phoenix" },
+  { id: "17", title: "Phoenix role permission matrix", publishedBy: "Kyle W", publishedAt: "2026-04-03", type: "pdf", subcategory: "User Access", category: "Phoenix" },
+];
+
 export const auditEvents = [
   {
     event: "PDF uploaded",
