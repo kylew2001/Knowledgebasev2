@@ -2,15 +2,31 @@
 
 import { useState } from "react";
 import { ChevronRight, FolderPlus, Home, Search, Upload } from "lucide-react";
-import { categoryCards, subcategoryCards } from "@/lib/mock-data";
+import { categoryCards } from "@/lib/mock-data";
 import CardBuilderModal from "@/components/CardBuilderModal";
+import SubCategoryModal from "@/components/SubCategoryModal";
 
-type Category = (typeof categoryCards)[number];
+type Category = (typeof categoryCards)[number] & { subcategories: string[] };
+
+const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
 
 export function KnowledgeBase() {
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
+  const [showSubCategory, setShowSubCategory] = useState(false);
   const [search, setSearch] = useState("");
+
+  function handleAddSubCategory(name: string) {
+    if (!selectedCategory) return;
+    const updated = categories.map((c) =>
+      c.title === selectedCategory.title
+        ? { ...c, subcategories: [...c.subcategories, name] }
+        : c
+    );
+    setCategories(updated);
+    setSelectedCategory(updated.find((c) => c.title === selectedCategory.title) ?? null);
+  }
 
   return (
     <div className="space-y-6">
@@ -22,13 +38,23 @@ export function KnowledgeBase() {
           </h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowCardBuilder(true)}
-            className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
-          >
-            <FolderPlus className="h-4 w-4" />
-            Category
-          </button>
+          {selectedCategory ? (
+            <button
+              onClick={() => setShowSubCategory(true)}
+              className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+            >
+              <FolderPlus className="h-4 w-4" />
+              Sub Category
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowCardBuilder(true)}
+              className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+            >
+              <FolderPlus className="h-4 w-4" />
+              Category
+            </button>
+          )}
           <button className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
             <Upload className="h-4 w-4" />
             Bulk PDFs
@@ -47,7 +73,7 @@ export function KnowledgeBase() {
       </div>
 
       {selectedCategory ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button
             onClick={() => setSelectedCategory(null)}
             className="focus-ring rounded-lg border border-line bg-white p-4 text-left transition hover:border-slate-300 hover:bg-panel"
@@ -62,7 +88,7 @@ export function KnowledgeBase() {
             <p className="mt-2 text-sm leading-6 text-slate-600">Return to the main knowledge base.</p>
           </button>
 
-          {subcategoryCards.map((name) => {
+          {selectedCategory.subcategories.map((name) => {
             const Icon = selectedCategory.icon;
             return (
               <button
@@ -87,8 +113,8 @@ export function KnowledgeBase() {
           })}
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {categoryCards.map((category) => {
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {categories.map((category) => {
             const Icon = category.icon;
             return (
               <button
@@ -127,6 +153,13 @@ export function KnowledgeBase() {
       )}
 
       {showCardBuilder && <CardBuilderModal onClose={() => setShowCardBuilder(false)} />}
+      {showSubCategory && selectedCategory && (
+        <SubCategoryModal
+          categoryTitle={selectedCategory.title}
+          onClose={() => setShowSubCategory(false)}
+          onAdd={handleAddSubCategory}
+        />
+      )}
     </div>
   );
 }

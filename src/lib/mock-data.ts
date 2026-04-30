@@ -11,6 +11,8 @@ import {
   LockKeyhole,
   MonitorSmartphone,
   Network,
+  Package,
+  Phone,
   Printer,
   Router,
   ShieldAlert,
@@ -47,7 +49,15 @@ export const categoryCards = [
     count: 18,
     icon: Cloud,
     color: "#0f766e",
-    tags: ["Exchange", "Teams", "Licensing"]
+    tags: ["Exchange", "Teams", "Licensing"],
+    subcategories: [
+      "Shared Mailboxes",
+      "Teams Setup",
+      "OneDrive & SharePoint",
+      "Licensing",
+      "Exchange Rules",
+      "Distribution Lists"
+    ]
   },
   {
     title: "Active Directory",
@@ -55,7 +65,15 @@ export const categoryCards = [
     count: 24,
     icon: UserCog,
     color: "#2563eb",
-    tags: ["Users", "Groups", "GPO"]
+    tags: ["Users", "Groups", "GPO"],
+    subcategories: [
+      "New User Setup",
+      "Password Resets",
+      "Account Unlocks",
+      "Group Management",
+      "GPO Issues",
+      "Offboarding"
+    ]
   },
   {
     title: "Networking",
@@ -63,7 +81,15 @@ export const categoryCards = [
     count: 15,
     icon: Network,
     color: "#b45309",
-    tags: ["VPN", "DNS", "DHCP"]
+    tags: ["VPN", "DNS", "DHCP"],
+    subcategories: [
+      "VPN Troubleshooting",
+      "Wi-Fi Issues",
+      "DNS & DHCP",
+      "Switch Ports",
+      "Firewall Rules",
+      "Connectivity Checks"
+    ]
   },
   {
     title: "Printers",
@@ -71,7 +97,15 @@ export const categoryCards = [
     count: 11,
     icon: Printer,
     color: "#7c3aed",
-    tags: ["Drivers", "Queues", "MFD"]
+    tags: ["Drivers", "Queues", "MFD"],
+    subcategories: [
+      "Driver Installation",
+      "Print Queue Issues",
+      "Follow-Me Print",
+      "MFD Setup",
+      "Network Printers",
+      "Fax Configuration"
+    ]
   },
   {
     title: "Endpoints",
@@ -79,7 +113,15 @@ export const categoryCards = [
     count: 21,
     icon: Laptop,
     color: "#be123c",
-    tags: ["Intune", "Hardware", "Builds"]
+    tags: ["Intune", "Hardware", "Builds"],
+    subcategories: [
+      "Laptop Builds",
+      "Intune Enrolment",
+      "Hardware Faults",
+      "Peripheral Setup",
+      "OS Reinstalls",
+      "Device Compliance"
+    ]
   },
   {
     title: "Security",
@@ -87,17 +129,49 @@ export const categoryCards = [
     count: 9,
     icon: ShieldAlert,
     color: "#475569",
-    tags: ["Phishing", "MFA", "Incidents"]
+    tags: ["Phishing", "MFA", "Incidents"],
+    subcategories: [
+      "Phishing Triage",
+      "MFA Setup",
+      "Account Recovery",
+      "Access Reviews",
+      "Incident Response",
+      "Security Audits"
+    ]
+  },
+  {
+    title: "Telephony",
+    description: "3CX phone system, extensions, voicemail, call groups, and softphone setup.",
+    count: 8,
+    icon: Phone,
+    color: "#0369a1",
+    tags: ["3CX", "Extensions", "Voicemail"],
+    subcategories: [
+      "3CX Setup",
+      "Extension Configuration",
+      "Voicemail Setup",
+      "Call Recording",
+      "Ring Groups",
+      "Softphone Issues"
+    ]
+  },
+  {
+    title: "Phoenix",
+    description: "ERP system access, general ledger, accounts payable, reporting, and data issues.",
+    count: 13,
+    icon: Package,
+    color: "#b45309",
+    tags: ["ERP", "Finance", "Reporting"],
+    subcategories: [
+      "User Access",
+      "General Ledger",
+      "Accounts Payable",
+      "Accounts Receivable",
+      "Reporting",
+      "Data Imports",
+      "System Errors"
+    ]
   }
-];
-
-export const subcategoryCards = [
-  "Shared Mailboxes",
-  "Password Resets",
-  "VPN Troubleshooting",
-  "New Starter Setup",
-  "Printer Deployment",
-  "Device Compliance"
 ];
 
 export const auditEvents = [
