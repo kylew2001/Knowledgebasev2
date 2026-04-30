@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BookOpen, ChevronRight, FileText, FolderPlus, Home, Pencil, PenLine, Plus, Search, Upload, X } from "lucide-react";
 import { categoryCards, iconOptions, mockPosts, type MockPost } from "@/lib/mock-data";
 import CardBuilderModal from "@/components/CardBuilderModal";
@@ -224,6 +224,12 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
   const [search, setSearch] = useState("");
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingSubcategory, setEditingSubcategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = () => { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); };
+    window.addEventListener("kb-navigate-home", handler);
+    return () => window.removeEventListener("kb-navigate-home", handler);
+  }, []);
 
   function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); }
   function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); setSelectedPost(null); }

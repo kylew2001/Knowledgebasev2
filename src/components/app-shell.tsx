@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BookOpenText, LayoutDashboard, LogOut, Settings } from "lucide-react";
 
 type AppShellProps = {
@@ -7,6 +10,8 @@ type AppShellProps = {
 };
 
 export function AppShell({ children, userRole = "super_admin" }: AppShellProps) {
+  const pathname = usePathname();
+
   const navItems = [
     { href: "/knowledge-base", label: "Knowledge Base", icon: BookOpenText },
     ...(userRole === "super_admin"
@@ -14,6 +19,13 @@ export function AppShell({ children, userRole = "super_admin" }: AppShellProps) 
       : []),
     { href: "/settings", label: "Settings", icon: Settings, muted: true }
   ];
+
+  function handleNavClick(href: string, e: React.MouseEvent) {
+    if (pathname === href && href === "/knowledge-base") {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("kb-navigate-home"));
+    }
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -31,6 +43,7 @@ export function AppShell({ children, userRole = "super_admin" }: AppShellProps) 
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(e) => handleNavClick(item.href, e)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                   item.muted
                     ? "text-slate-400 hover:bg-slate-50"
