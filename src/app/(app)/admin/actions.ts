@@ -36,6 +36,28 @@ export type StorageStats = {
   total_bytes: number;
 };
 
+type MfaFactor = {
+  id: string;
+  factor_type?: string;
+  status?: string;
+};
+
+type MfaFactorsResponse = {
+  factors?: MfaFactor[];
+  totp?: MfaFactor[];
+  phone?: MfaFactor[];
+} | null;
+
+function normalizeMfaFactors(data: MfaFactorsResponse): MfaFactor[] {
+  return [...(data?.factors ?? []), ...(data?.totp ?? []), ...(data?.phone ?? [])];
+}
+
+function hasVerifiedTotp(data: MfaFactorsResponse): boolean {
+  return normalizeMfaFactors(data).some(
+    (factor) => factor.factor_type === "totp" && factor.status === "verified"
+  );
+}
+
 async function guardAdmin() {
   const current = await getCurrentProfile();
   if (!current || !isSuperAdmin(current.profile.role)) redirect("/knowledge-base");
@@ -74,14 +96,15 @@ export async function listUsers(): Promise<AdminUser[]> {
 
   if (!profiles) return [];
   const emailMap = new Map((authData?.users ?? []).map((u) => [u.id, u.email ?? ""]));
-  const totpMap = new Map(
-    (authData?.users ?? []).map((u) => [
-      u.id,
-      (u.factors ?? []).some(
-        (factor) => factor.factor_type === "totp" && factor.status === "verified"
-      )
-    ])
+  const factorResults = await Promise.all(
+    profiles.map(async (profile) => {
+      const { data } = await admin.auth.admin.mfa.listFactors({
+        userId: profile.id
+      });
+      return [profile.id, hasVerifiedTotp(data as MfaFactorsResponse)] as const;
+    })
   );
+  const totpMap = new Map(factorResults);
 
   return profiles.map((p) => ({
     ...p,
@@ -198,16 +221,18 @@ export async function resetUserTwoFactor(userId: string): Promise<{ error: strin
   const current = await guardAdmin();
   const admin = createAdminClient();
 
-  const [{ data: profile }, { data: authUser, error: userError }] = await Promise.all([
+  const [{ data: profile }, { data: authUser, error: userError }, { data: factorsData, error: factorsError }] = await Promise.all([
     admin.from("profiles").select("display_name, username").eq("id", userId).single(),
-    admin.auth.admin.getUserById(userId)
+    admin.auth.admin.getUserById(userId),
+    admin.auth.admin.mfa.listFactors({ userId })
   ]);
 
   if (userError || !authUser?.user) {
     return { error: userError?.message ?? "User not found" };
   }
+  if (factorsError) return { error: factorsError.message };
 
-  const factors = authUser.user.factors ?? [];
+  const factors = normalizeMfaFactors(factorsData as MfaFactorsResponse);
   const totpFactors = factors.filter((factor) => factor.factor_type === "totp");
 
   for (const factor of totpFactors) {
