@@ -24,6 +24,7 @@ import {
   saveSecuritySettings
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
+import NewUserModal from "@/components/NewUserModal";
 
 type Props = {
   users: AdminUser[];
@@ -53,6 +54,7 @@ export function AdminDashboard({
 }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [showNewUser, setShowNewUser] = useState(false);
 
   // Role select state
   const [userRoles, setUserRoles] = useState<Record<string, string>>(
@@ -160,7 +162,7 @@ export function AdminDashboard({
         <div className="rounded-lg border border-line bg-white p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-bold text-ink">Users and permissions</h3>
-            <button className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+            <button onClick={() => setShowNewUser(true)} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
               <UserPlus className="h-4 w-4" />
               New User
             </button>
@@ -339,6 +341,12 @@ export function AdminDashboard({
         </div>
       </section>
 
+      {showNewUser && (
+        <NewUserModal
+          onClose={() => setShowNewUser(false)}
+          onCreated={() => window.location.reload()}
+        />
+      )}
       {editingUser && (
         <EditUserModal
           user={editingUser}

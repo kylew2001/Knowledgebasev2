@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { LockKeyhole, ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { checkUsername, signInWithUsername, setInitialPassword } from "@/app/auth/actions";
+import {
+  checkUsername,
+  signInWithUsername,
+  setInitialPassword,
+  verifyEmailOtp,
+  resendEmailOtp
+} from "@/app/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
-type Step = "username" | "password" | "set-password";
+type Step = "username" | "password" | "set-password" | "totp" | "email-otp";
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -29,6 +37,7 @@ function parseSignInError(result: { error: string; lockoutMinutes?: number }): s
 }
 
 export default function LoginForm() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>("username");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,11 +46,42 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // MFA state
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCountdown, setResendCountdown] = useState(0);
+
+  // Countdown timer for email OTP resend
+  useEffect(() => {
+    if (step !== "email-otp") return;
+    setResendCountdown(60);
+  }, [step]);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const id = setInterval(() => {
+      setResendCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(id);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [resendCountdown]);
+
   function goBack() {
     setStep("username");
     setPassword("");
     setConfirm("");
     setError(null);
+    setTotpCode("");
+    setOtpCode("");
+    setMfaFactorId(null);
+    setUserId(null);
   }
 
   function handleUsernameSubmit(e: React.FormEvent) {
@@ -63,18 +103,90 @@ export default function LoginForm() {
     setError(null);
     startTransition(async () => {
       const result = await signInWithUsername(username.trim(), password);
-      if (result?.error) setError(parseSignInError(result));
+      if (!result) return; // redirected
+
+      if ("mfaRequired" in result) {
+        setUserId(result.userId);
+        if (result.mfaRequired === "totp") {
+          setMfaFactorId(result.factorId);
+          setStep("totp");
+        } else {
+          setStep("email-otp");
+        }
+        return;
+      }
+
+      if (result.error) {
+        setError(parseSignInError(result));
+      }
     });
   }
 
   function handleSetPasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isStrong(password)) { setError("Password does not meet all requirements."); return; }
-    if (password !== confirm) { setError("Passwords do not match."); return; }
+    if (!isStrong(password)) {
+      setError("Password does not meet all requirements.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const result = await setInitialPassword(username.trim(), password);
       if (result?.error) setError("Failed to set password. Please try again.");
+    });
+  }
+
+  function handleTotpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mfaFactorId) return;
+    setError(null);
+    startTransition(async () => {
+      const supabase = createClient();
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId
+      });
+      if (challengeError || !challengeData) {
+        setError("Failed to initiate MFA challenge. Please try again.");
+        return;
+      }
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challengeData.id,
+        code: totpCode
+      });
+      if (verifyError) {
+        setError("Invalid code. Please try again.");
+        return;
+      }
+      router.push("/knowledge-base");
+    });
+  }
+
+  function handleEmailOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!userId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await verifyEmailOtp(userId, otpCode);
+      if (!result) return; // redirected
+      if (result.error) {
+        setError("Invalid or expired code. Please try again.");
+      }
+    });
+  }
+
+  function handleResend() {
+    setError(null);
+    startTransition(async () => {
+      const result = await resendEmailOtp(username.trim());
+      if (result?.error) {
+        setError("Failed to resend code. Please try again.");
+        return;
+      }
+      setResendCountdown(60);
     });
   }
 
@@ -145,7 +257,13 @@ export default function LoginForm() {
             </div>
           </label>
           {error && (
-            <p className={`text-sm ${error.includes("locked") || error.includes("disabled") ? "text-amber-700" : "text-red-600"}`}>
+            <p
+              className={`text-sm ${
+                error.includes("locked") || error.includes("disabled")
+                  ? "text-amber-700"
+                  : "text-red-600"
+              }`}
+            >
               {error}
             </p>
           )}
@@ -170,9 +288,7 @@ export default function LoginForm() {
               Setting up <strong>{username}</strong>
             </span>
           </button>
-          <p className="text-sm text-slate-600">
-            Welcome! Please set a strong password to continue.
-          </p>
+          <p className="text-sm text-slate-600">Welcome! Please set a strong password to continue.</p>
           <label className="block">
             <span className="text-sm font-semibold text-slate-700">New password</span>
             <div className="relative mt-2">
@@ -198,7 +314,9 @@ export default function LoginForm() {
               {PASSWORD_RULES.map((rule) => (
                 <li
                   key={rule.label}
-                  className={`flex items-center gap-2 text-xs ${rule.test(password) ? "text-green-600" : "text-slate-400"}`}
+                  className={`flex items-center gap-2 text-xs ${
+                    rule.test(password) ? "text-green-600" : "text-slate-400"
+                  }`}
                 >
                   <span>{rule.test(password) ? "✓" : "○"}</span>
                   {rule.label}
@@ -222,6 +340,94 @@ export default function LoginForm() {
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
           >
             {isPending ? "Setting password…" : "Set password & sign in"}
+          </button>
+        </form>
+      )}
+
+      {step === "totp" && (
+        <form onSubmit={handleTotpSubmit} className="space-y-4">
+          <button
+            type="button"
+            onClick={goBack}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Two-factor authentication</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+          </div>
+          <label className="block">
+            <span className="sr-only">Authenticator code</span>
+            <input
+              autoFocus
+              required
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="000000"
+              className="focus-ring mt-1 h-14 w-full rounded-lg border border-line px-3 text-center text-2xl tracking-widest"
+            />
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            disabled={isPending || totpCode.length !== 6}
+            className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
+          >
+            {isPending ? "Verifying…" : "Verify"}
+          </button>
+        </form>
+      )}
+
+      {step === "email-otp" && (
+        <form onSubmit={handleEmailOtpSubmit} className="space-y-4">
+          <button
+            type="button"
+            onClick={goBack}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Check your email</p>
+            <p className="mt-1 text-sm text-slate-500">
+              A 6-digit code was sent to your email. It expires in 10 minutes.
+            </p>
+          </div>
+          <label className="block">
+            <span className="sr-only">Email code</span>
+            <input
+              autoFocus
+              required
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="000000"
+              className="focus-ring mt-1 h-14 w-full rounded-lg border border-line px-3 text-center text-2xl tracking-widest"
+            />
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            disabled={isPending || otpCode.length !== 6}
+            className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
+          >
+            {isPending ? "Verifying…" : "Verify"}
+          </button>
+          <button
+            type="button"
+            disabled={isPending || resendCountdown > 0}
+            onClick={handleResend}
+            className="w-full text-center text-sm text-slate-500 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend code"}
           </button>
         </form>
       )}
