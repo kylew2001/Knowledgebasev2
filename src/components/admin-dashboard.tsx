@@ -22,6 +22,7 @@ import {
   updateUserRole,
   toggleUserDisabled,
   sendPasswordReset,
+  resendUserInvite,
   resetUserTwoFactor,
   sendAdminTestEmail,
   saveSecuritySettings
@@ -75,6 +76,9 @@ export function AdminDashboard({
   // Password reset state
   const [resetSent, setResetSent] = useState<Record<string, boolean>>({});
   const [, startResetTransition] = useTransition();
+  const [inviteSent, setInviteSent] = useState<Record<string, boolean>>({});
+  const [inviteErrors, setInviteErrors] = useState<Record<string, string | null>>({});
+  const [, startInviteTransition] = useTransition();
   const [twoFaResetSent, setTwoFaResetSent] = useState<Record<string, boolean>>({});
   const [, startTwoFaResetTransition] = useTransition();
 
@@ -117,6 +121,19 @@ export function AdminDashboard({
       await sendPasswordReset(userId);
       setResetSent((prev) => ({ ...prev, [userId]: true }));
       setTimeout(() => setResetSent((prev) => ({ ...prev, [userId]: false })), 2000);
+    });
+  }
+
+  function handleResendInvite(userId: string) {
+    setInviteErrors((prev) => ({ ...prev, [userId]: null }));
+    startInviteTransition(async () => {
+      const result = await resendUserInvite(userId);
+      if (result?.error) {
+        setInviteErrors((prev) => ({ ...prev, [userId]: result.error }));
+        return;
+      }
+      setInviteSent((prev) => ({ ...prev, [userId]: true }));
+      setTimeout(() => setInviteSent((prev) => ({ ...prev, [userId]: false })), 2000);
     });
   }
 
@@ -229,6 +246,9 @@ export function AdminDashboard({
                         <p className="mt-1 text-xs text-slate-400">
                           2FA: {user.has_totp ? "Configured" : user.totp_setup_required ? "Setup required" : "Not configured"}
                         </p>
+                        {inviteErrors[user.id] && (
+                          <p className="mt-1 text-xs text-red-600">{inviteErrors[user.id]}</p>
+                        )}
                       </td>
                       <td className="border-b border-line px-3 py-3">
                         <select
@@ -266,6 +286,17 @@ export function AdminDashboard({
                             className="focus-ring rounded-lg border border-line p-2 hover:bg-panel"
                           >
                             <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            title="Resend invite email"
+                            onClick={() => handleResendInvite(user.id)}
+                            className="focus-ring rounded-lg border border-line p-2 hover:bg-panel"
+                          >
+                            {inviteSent[user.id] ? (
+                              <span className="text-xs font-semibold text-teal-700">Sent!</span>
+                            ) : (
+                              <Mail className="h-4 w-4" />
+                            )}
                           </button>
                           <button
                             title="Send password reset"

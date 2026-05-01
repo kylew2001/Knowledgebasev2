@@ -267,9 +267,6 @@ export async function createUser(data: {
 
   if (profileError) return { error: profileError.message };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
-  await sendInviteEmail(data.email, data.username.toLowerCase().trim(), appUrl);
-
   await writeAuditLog(
     admin,
     current.profile.id,
@@ -278,6 +275,17 @@ export async function createUser(data: {
     "profiles",
     userId
   );
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+  try {
+    await sendInviteEmail(data.email, data.username.toLowerCase().trim(), appUrl);
+  } catch (err) {
+    return {
+      error: `User was created, but the invite email failed: ${
+        err instanceof Error ? err.message : "Unknown email error"
+      }`
+    };
+  }
 
   return null;
 }

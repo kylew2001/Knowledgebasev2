@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, isSuperAdmin } from "@/lib/auth";
-import { sendResendTestEmail } from "@/lib/email";
+import { sendInviteEmail, sendResendTestEmail } from "@/lib/email";
 import { redirect } from "next/navigation";
 
 export type AdminUser = {
@@ -213,6 +213,38 @@ export async function sendPasswordReset(userId: string): Promise<{ error: string
 
   const displayName = profile?.display_name ?? profile?.username ?? userId;
   await writeAuditLog(admin, current.profile.id, "password_reset", displayName, "profiles", userId);
+
+  return null;
+}
+
+export async function resendUserInvite(userId: string): Promise<{ error: string } | null> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  const [{ data: profile }, { data: authUser, error: userError }] = await Promise.all([
+    admin.from("profiles").select("display_name, username").eq("id", userId).single(),
+    admin.auth.admin.getUserById(userId)
+  ]);
+
+  if (userError || !authUser?.user) {
+    return { error: userError?.message ?? "User not found" };
+  }
+
+  const email = authUser.user.email;
+  const username = profile?.username;
+  if (!email || !username) {
+    return { error: "User is missing an email address or username." };
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+  try {
+    await sendInviteEmail(email, username, appUrl);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send invite email" };
+  }
+
+  const displayName = profile?.display_name ?? username;
+  await writeAuditLog(admin, current.profile.id, "settings_updated", `Invite resent to ${displayName}`, "profiles", userId);
 
   return null;
 }
