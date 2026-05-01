@@ -33,6 +33,19 @@ export async function getCurrentProfile() {
   };
 }
 
+export async function getCurrentUserGroupIds() {
+  const current = await getCurrentProfile();
+  if (!current) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("user_groups")
+    .select("group_id")
+    .eq("user_id", current.profile.id);
+
+  return (data ?? []).map((row) => row.group_id as string);
+}
+
 export function canEdit(role: UserRole) {
   return role === "super_admin" || role === "editor";
 }

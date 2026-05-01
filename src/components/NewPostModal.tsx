@@ -4,11 +4,14 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { type MockPost } from "@/lib/mock-data";
 import { derivePostType, type Widget } from "@/lib/post-content";
+import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
+import VisibilityEditor from "@/components/VisibilityEditor";
 
 type Props = {
   categoryTitle: string;
   subcategoryTitle: string;
   publishedBy: string;
+  groups: VisibilityGroup[];
   onClose: () => void;
   onAdd: (post: MockPost) => void;
 };
@@ -17,12 +20,14 @@ export default function NewPostModal({
   categoryTitle,
   subcategoryTitle,
   publishedBy,
+  groups,
   onClose,
   onAdd
 }: Props) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [pdfName, setPdfName] = useState("");
+  const [visibility, setVisibility] = useState<VisibilityRule>({ mode: "everyone", groupIds: [] });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,6 +60,7 @@ export default function NewPostModal({
       publishedAt: new Date().toISOString().split("T")[0],
       type: derivedType === "empty" ? undefined : derivedType,
       widgets,
+      visibility,
       subcategory: subcategoryTitle,
       category: categoryTitle
     });
@@ -114,6 +120,13 @@ export default function NewPostModal({
             The post type is detected from its widgets: written content, PDF
             attachment, or both.
           </p>
+
+          <VisibilityEditor
+            label="Post visibility"
+            visibility={visibility}
+            groups={groups}
+            onChange={setVisibility}
+          />
 
           <div className="flex gap-3 pt-1">
             <button

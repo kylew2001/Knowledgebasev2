@@ -8,8 +8,14 @@ import SubCategoryModal from "@/components/SubCategoryModal";
 import NewPostModal from "@/components/NewPostModal";
 import { PostPage } from "@/components/PostPage";
 import { derivePostType, getPostWidgets } from "@/lib/post-content";
+import { canSeeVisibility, everyoneVisibility, getVisibilityLabel, type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
+import VisibilityEditor from "@/components/VisibilityEditor";
 
-type Category = (typeof categoryCards)[number] & { subcategories: string[] };
+type Category = (typeof categoryCards)[number] & {
+  subcategories: string[];
+  visibility?: VisibilityRule;
+  subcategoryVisibility?: Record<string, VisibilityRule>;
+};
 
 const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
 
@@ -53,11 +59,12 @@ function getCategoryResourceCount(posts: MockPost[], categoryTitle: string) {
 
 type EditCategoryModalProps = {
   category: Category;
+  groups: VisibilityGroup[];
   onClose: () => void;
   onSave: (updated: Partial<Category>) => void;
 };
 
-function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps) {
+function EditCategoryModal({ category, groups, onClose, onSave }: EditCategoryModalProps) {
   const [title, setTitle] = useState(category.title);
   const [description, setDescription] = useState(category.description);
   const [tagsText, setTagsText] = useState(category.tags.join(", "));
@@ -65,6 +72,7 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
   const [iconName, setIconName] = useState(
     iconOptions.find((o) => o.icon === category.icon)?.name ?? iconOptions[0].name
   );
+  const [visibility, setVisibility] = useState<VisibilityRule>(category.visibility ?? everyoneVisibility);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +82,7 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean);
-    onSave({ title: title.trim(), description: description.trim(), tags, color, icon: selectedIcon });
+    onSave({ title: title.trim(), description: description.trim(), tags, color, icon: selectedIcon, visibility });
     onClose();
   }
 
@@ -153,6 +161,12 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
               </div>
             </div>
           </div>
+          <VisibilityEditor
+            label="Category visibility"
+            visibility={visibility}
+            groups={groups}
+            onChange={setVisibility}
+          />
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel">Cancel</button>
             <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">Save changes</button>
@@ -168,17 +182,20 @@ function EditCategoryModal({ category, onClose, onSave }: EditCategoryModalProps
 type EditSubCategoryModalProps = {
   name: string;
   categoryTitle: string;
+  groups: VisibilityGroup[];
+  visibility: VisibilityRule;
   onClose: () => void;
-  onSave: (newName: string) => void;
+  onSave: (newName: string, visibility: VisibilityRule) => void;
 };
 
-function EditSubCategoryModal({ name, categoryTitle, onClose, onSave }: EditSubCategoryModalProps) {
+function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initialVisibility, onClose, onSave }: EditSubCategoryModalProps) {
   const [value, setValue] = useState(name);
+  const [visibility, setVisibility] = useState<VisibilityRule>(initialVisibility);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!value.trim()) return;
-    onSave(value.trim());
+    onSave(value.trim(), visibility);
     onClose();
   }
 
@@ -198,6 +215,12 @@ function EditSubCategoryModal({ name, categoryTitle, onClose, onSave }: EditSubC
             <input autoFocus required value={value} onChange={(e) => setValue(e.target.value)}
               className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3" />
           </label>
+          <VisibilityEditor
+            label="Subcategory visibility"
+            visibility={visibility}
+            groups={groups}
+            onChange={setVisibility}
+          />
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel">Cancel</button>
             <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">Save</button>
@@ -210,8 +233,22 @@ function EditSubCategoryModal({ name, categoryTitle, onClose, onSave }: EditSubC
 
 // ── Main component ───────────────────────────────────────────────────────────
 
-export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
+export function KnowledgeBase({
+  userRole = "viewer",
+  userGroupIds = [],
+  groups = []
+}: {
+  userRole?: string;
+  userGroupIds?: string[];
+  groups?: VisibilityGroup[];
+}) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
+  const adminGroupId = groups.find((group) => group.name.toLowerCase() === "admin")?.id;
+  const canSeeAll =
+    canEdit ||
+    (adminGroupId
+      ? canSeeVisibility({ mode: "groups", groupIds: [adminGroupId] }, userGroupIds, groups)
+      : false);
 
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [posts, setPosts] = useState<MockPost[]>(mockPosts);
@@ -234,10 +271,20 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
   function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); }
   function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); setSelectedPost(null); }
 
-  function handleAddSubCategory(name: string) {
+  function handleAddCategory(category: Category) {
+    setCategories((prev) => [...prev, category]);
+  }
+
+  function handleAddSubCategory(name: string, visibility: VisibilityRule) {
     if (!selectedCategory) return;
     const updated = categories.map((c) =>
-      c.title === selectedCategory.title ? { ...c, subcategories: [...c.subcategories, name] } : c
+      c.title === selectedCategory.title
+        ? {
+            ...c,
+            subcategories: [...c.subcategories, name],
+            subcategoryVisibility: { ...(c.subcategoryVisibility ?? {}), [name]: visibility }
+          }
+        : c
     );
     setCategories(updated);
     setSelectedCategory(updated.find((c) => c.title === selectedCategory.title) ?? null);
@@ -262,12 +309,19 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
     }
   }
 
-  function handleSaveSubcategory(newName: string) {
+  function handleSaveSubcategory(newName: string, visibility: VisibilityRule) {
     if (!editingSubcategory || !selectedCategory) return;
     const oldName = editingSubcategory;
     const updatedCats = categories.map((c) =>
       c.title === selectedCategory.title
-        ? { ...c, subcategories: c.subcategories.map((s) => (s === oldName ? newName : s)) }
+        ? {
+            ...c,
+            subcategories: c.subcategories.map((s) => (s === oldName ? newName : s)),
+            subcategoryVisibility: Object.fromEntries(
+              Object.entries({ ...(c.subcategoryVisibility ?? {}), [newName]: visibility })
+                .filter(([key]) => key !== oldName)
+            )
+          }
         : c
     );
     setCategories(updatedCats);
@@ -279,21 +333,31 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
     setPosts((prev) => [post, ...prev]);
   }
 
-  function handleSavePostWidgets(postId: string, widgets: import("@/lib/post-content").Widget[]) {
+  function handleSavePost(postId: string, widgets: import("@/lib/post-content").Widget[], visibility: VisibilityRule) {
     setPosts((prev) =>
       prev.map((post) =>
-        post.id === postId ? { ...post, widgets, type: getStoredPostType(widgets) } : post
+        post.id === postId ? { ...post, widgets, visibility, type: getStoredPostType(widgets) } : post
       )
     );
     setSelectedPost((current) =>
       current?.id === postId
-        ? { ...current, widgets, type: getStoredPostType(widgets) }
+        ? { ...current, widgets, visibility, type: getStoredPostType(widgets) }
         : current
     );
   }
 
+  const visibleCategories = categories.filter((category) =>
+    canSeeVisibility(category.visibility, userGroupIds, groups, canSeeAll)
+  );
+  const visibleSubcategories = selectedCategory?.subcategories.filter((name) =>
+    canSeeVisibility(selectedCategory.subcategoryVisibility?.[name], userGroupIds, groups, canSeeAll)
+  ) ?? [];
+
   const subcategoryPosts = posts.filter(
-    (p) => p.category === selectedCategory?.title && p.subcategory === selectedSubcategory
+    (p) =>
+      p.category === selectedCategory?.title &&
+      p.subcategory === selectedSubcategory &&
+      canSeeVisibility(p.visibility, userGroupIds, groups, canSeeAll)
   );
 
   const level = selectedSubcategory ? 2 : selectedCategory ? 1 : 0;
@@ -310,7 +374,8 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
         userRole={userRole as import("@/lib/auth").UserRole}
         categoryTitle={selectedCategory.title}
         onBack={() => setSelectedPost(null)}
-        onSaveWidgets={(widgets) => handleSavePostWidgets(selectedPost.id, widgets)}
+        groups={groups}
+        onSavePost={(widgets, visibility) => handleSavePost(selectedPost.id, widgets, visibility)}
       />
     );
   }
@@ -357,9 +422,12 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
       {/* Level 0 — categories */}
       {level === 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {categories.map((category) => {
+          {visibleCategories.map((category) => {
             const Icon = category.icon;
-            const resourceCount = getCategoryResourceCount(posts, category.title);
+            const resourceCount = getCategoryResourceCount(
+              posts.filter((post) => canSeeVisibility(post.visibility, userGroupIds, groups, canSeeAll)),
+              category.title
+            );
             return (
               <div key={category.title} className="relative">
                 <button onClick={() => goCategory(category)} className="focus-ring w-full rounded-lg border border-line bg-white p-4 pr-12 text-left transition hover:border-slate-300 hover:bg-panel">
@@ -378,6 +446,9 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                   </div>
                   <p className="mt-4 text-xs font-semibold text-slate-500">
                     {resourceCount} resource{resourceCount !== 1 ? "s" : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Visible to {getVisibilityLabel(category.visibility, groups)}
                   </p>
                 </button>
                 {canEdit && (
@@ -410,9 +481,13 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
             <p className="mt-2 text-sm leading-6 text-slate-600">Return to the main knowledge base.</p>
           </button>
 
-          {selectedCategory.subcategories.map((name) => {
+          {visibleSubcategories.map((name) => {
             const Icon = selectedCategory.icon;
-            const count = posts.filter((p) => p.category === selectedCategory.title && p.subcategory === name).length;
+            const count = posts.filter((p) =>
+              p.category === selectedCategory.title &&
+              p.subcategory === name &&
+              canSeeVisibility(p.visibility, userGroupIds, groups, canSeeAll)
+            ).length;
             return (
               <div key={name} className="relative">
                 <button onClick={() => setSelectedSubcategory(name)} className="focus-ring w-full rounded-lg border border-line bg-white p-4 pr-12 text-left transition hover:border-slate-300 hover:bg-panel">
@@ -424,6 +499,9 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
                   </div>
                   <h3 className="text-lg font-bold text-ink">{name}</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-500">{selectedCategory.title} · subcategory</p>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Visible to {getVisibilityLabel(selectedCategory.subcategoryVisibility?.[name], groups)}
+                  </p>
                   {count > 0 && <p className="mt-3 text-xs font-semibold text-slate-500">{count} post{count !== 1 ? "s" : ""}</p>}
                 </button>
                 {canEdit && (
@@ -487,15 +565,27 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
         </div>
       )}
 
-      {showCardBuilder && <CardBuilderModal onClose={() => setShowCardBuilder(false)} />}
+      {showCardBuilder && (
+        <CardBuilderModal
+          groups={groups}
+          onClose={() => setShowCardBuilder(false)}
+          onAdd={handleAddCategory}
+        />
+      )}
       {showSubCategory && selectedCategory && (
-        <SubCategoryModal categoryTitle={selectedCategory.title} onClose={() => setShowSubCategory(false)} onAdd={handleAddSubCategory} />
+        <SubCategoryModal
+          categoryTitle={selectedCategory.title}
+          groups={groups}
+          onClose={() => setShowSubCategory(false)}
+          onAdd={handleAddSubCategory}
+        />
       )}
       {showNewPost && selectedCategory && selectedSubcategory && (
         <NewPostModal
           categoryTitle={selectedCategory.title}
           subcategoryTitle={selectedSubcategory}
           publishedBy="Kyle W"
+          groups={groups}
           onClose={() => setShowNewPost(false)}
           onAdd={handleAddPost}
         />
@@ -503,6 +593,7 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
       {editingCategory && (
         <EditCategoryModal
           category={editingCategory}
+          groups={groups}
           onClose={() => setEditingCategory(null)}
           onSave={handleSaveCategory}
         />
@@ -511,6 +602,8 @@ export function KnowledgeBase({ userRole = "viewer" }: { userRole?: string }) {
         <EditSubCategoryModal
           name={editingSubcategory}
           categoryTitle={selectedCategory.title}
+          groups={groups}
+          visibility={selectedCategory.subcategoryVisibility?.[editingSubcategory] ?? everyoneVisibility}
           onClose={() => setEditingSubcategory(null)}
           onSave={handleSaveSubcategory}
         />

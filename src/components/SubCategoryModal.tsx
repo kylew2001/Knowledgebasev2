@@ -2,20 +2,24 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
+import VisibilityEditor from "@/components/VisibilityEditor";
 
 type Props = {
   categoryTitle: string;
+  groups: VisibilityGroup[];
   onClose: () => void;
-  onAdd: (name: string) => void;
+  onAdd: (name: string, visibility: VisibilityRule) => void;
 };
 
-export default function SubCategoryModal({ categoryTitle, onClose, onAdd }: Props) {
+export default function SubCategoryModal({ categoryTitle, groups, onClose, onAdd }: Props) {
   const [name, setName] = useState("");
+  const [visibility, setVisibility] = useState<VisibilityRule>({ mode: "everyone", groupIds: [] });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    onAdd(name.trim());
+    onAdd(name.trim(), visibility);
     onClose();
   }
 
@@ -43,6 +47,12 @@ export default function SubCategoryModal({ categoryTitle, onClose, onAdd }: Prop
               className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
             />
           </label>
+          <VisibilityEditor
+            label="Subcategory visibility"
+            visibility={visibility}
+            groups={groups}
+            onChange={setVisibility}
+          />
           <div className="flex gap-3 pt-1">
             <button
               type="button"

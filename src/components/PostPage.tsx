@@ -27,6 +27,8 @@ import {
 import { type MockPost } from "@/lib/mock-data";
 import { type UserRole } from "@/lib/auth";
 import { derivePostType } from "@/lib/post-content";
+import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
+import VisibilityEditor from "@/components/VisibilityEditor";
 
 // ── Widget types ────────────────────────────────────────────────────────────
 
@@ -273,7 +275,8 @@ type Props = {
   userRole: UserRole;
   onBack: () => void;
   categoryTitle: string;
-  onSaveWidgets?: (widgets: Widget[]) => void;
+  groups: VisibilityGroup[];
+  onSavePost?: (widgets: Widget[], visibility: VisibilityRule) => void;
 };
 
 const typeConfig = {
@@ -297,17 +300,24 @@ function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
   return typeConfig.written;
 }
 
-export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets }: Props) {
+export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSavePost }: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const [editing, setEditing] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(post.widgets ?? defaultContent[post.id] ?? []);
   const [draft, setDraft] = useState<Widget[]>(widgets);
+  const [visibility, setVisibility] = useState<VisibilityRule>(post.visibility ?? { mode: "everyone", groupIds: [] });
+  const [draftVisibility, setDraftVisibility] = useState<VisibilityRule>(visibility);
 
-  function startEdit() { setDraft(widgets); setEditing(true); }
+  function startEdit() {
+    setDraft(widgets);
+    setDraftVisibility(visibility);
+    setEditing(true);
+  }
   function cancelEdit() { setEditing(false); }
   function saveEdit() {
     setWidgets(draft);
-    onSaveWidgets?.(draft);
+    setVisibility(draftVisibility);
+    onSavePost?.(draft, draftVisibility);
     setEditing(false);
   }
 
@@ -399,6 +409,17 @@ export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets 
         )}
 
         {editing && <AddWidgetBar onAdd={(w) => insertWidget(w, -1)} />}
+
+        {editing && (
+          <div className="mb-4 rounded-lg border border-line p-3">
+            <VisibilityEditor
+              label="Post visibility"
+              visibility={draftVisibility}
+              groups={groups}
+              onChange={setDraftVisibility}
+            />
+          </div>
+        )}
 
         {current.map((widget, idx) => (
           <div key={widget.id}>

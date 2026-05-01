@@ -2,18 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { X } from "lucide-react";
-import { updateUser, type AdminUser } from "@/app/(app)/admin/actions";
+import { updateUser, type AdminGroup, type AdminUser } from "@/app/(app)/admin/actions";
+import { getGroupPath } from "@/lib/visibility";
 
 type Props = {
   user: AdminUser;
+  groups: AdminGroup[];
   onClose: () => void;
   onSaved: (updated: Partial<AdminUser>) => void;
 };
 
-export default function EditUserModal({ user, onClose, onSaved }: Props) {
+export default function EditUserModal({ user, groups, onClose, onSaved }: Props) {
   const [displayName, setDisplayName] = useState(user.display_name ?? "");
   const [username, setUsername] = useState(user.username ?? "");
   const [email, setEmail] = useState(user.email);
+  const [groupIds, setGroupIds] = useState(user.group_ids);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -21,12 +24,12 @@ export default function EditUserModal({ user, onClose, onSaved }: Props) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await updateUser(user.id, { display_name: displayName, username, email });
+      const result = await updateUser(user.id, { display_name: displayName, username, email, group_ids: groupIds });
       if (result?.error) {
         setError(result.error);
         return;
       }
-      onSaved({ display_name: displayName, username, email });
+      onSaved({ display_name: displayName, username, email, group_ids: groupIds });
       onClose();
     });
   }
@@ -69,6 +72,32 @@ export default function EditUserModal({ user, onClose, onSaved }: Props) {
               className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
             />
           </label>
+          <div>
+            <span className="text-sm font-semibold text-slate-700">Departments / groups</span>
+            <div className="mt-2 max-h-48 space-y-2 overflow-auto rounded-lg border border-line p-3">
+              {groups.length === 0 ? (
+                <p className="text-sm text-slate-500">No groups configured.</p>
+              ) : (
+                groups.map((group) => (
+                  <label key={group.id} className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={groupIds.includes(group.id)}
+                      onChange={(e) =>
+                        setGroupIds((prev) =>
+                          e.target.checked
+                            ? [...prev, group.id]
+                            : prev.filter((id) => id !== group.id)
+                        )
+                      }
+                      className="h-4 w-4 rounded border-line"
+                    />
+                    {getGroupPath(group, groups)}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3 pt-1">
             <button

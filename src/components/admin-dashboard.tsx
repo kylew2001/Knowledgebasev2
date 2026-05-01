@@ -40,6 +40,7 @@ import {
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
 import NewUserModal from "@/components/NewUserModal";
+import { getGroupPath } from "@/lib/visibility";
 
 type Props = {
   users: AdminUser[];
@@ -426,6 +427,15 @@ export function AdminDashboard({
                         <p className="mt-1 text-xs text-slate-400">
                           2FA: {user.has_totp ? "Configured" : user.totp_setup_required ? "Setup required" : "Not configured"}
                         </p>
+                        {user.group_ids.length > 0 && (
+                          <p className="mt-1 text-xs text-slate-500">
+                            Groups: {user.group_ids
+                              .map((groupId) => groups.find((group) => group.id === groupId))
+                              .filter((group): group is AdminGroup => Boolean(group))
+                              .map((group) => getGroupPath(group, groups))
+                              .join(", ")}
+                          </p>
+                        )}
                         {inviteErrors[user.id] && (
                           <p className="mt-1 text-xs text-red-600">{inviteErrors[user.id]}</p>
                         )}
@@ -695,6 +705,7 @@ export function AdminDashboard({
       {editingUser && (
         <EditUserModal
           user={editingUser}
+          groups={groups}
           onClose={() => setEditingUser(null)}
           onSaved={(updated) => {
             handleSaved(editingUser.id, updated);

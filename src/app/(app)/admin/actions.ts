@@ -15,6 +15,7 @@ export type AdminUser = {
   last_login_at: string | null;
   totp_setup_required: boolean;
   has_totp: boolean;
+  group_ids: string[];
 };
 
 export type SecuritySettings = {
@@ -98,9 +99,10 @@ export async function listUsers(): Promise<AdminUser[]> {
   await guardAdmin();
   const admin = createAdminClient();
 
-  const [{ data: profiles }, { data: authData }] = await Promise.all([
+  const [{ data: profiles }, { data: authData }, { data: memberships }] = await Promise.all([
     admin.from("profiles").select("id, display_name, username, role, disabled_at, last_login_at, totp_setup_required"),
-    admin.auth.admin.listUsers({ perPage: 1000 })
+    admin.auth.admin.listUsers({ perPage: 1000 }),
+    admin.from("user_groups").select("user_id, group_id")
   ]);
 
   if (!profiles) return [];
@@ -114,11 +116,18 @@ export async function listUsers(): Promise<AdminUser[]> {
     })
   );
   const totpMap = new Map(factorResults);
+  const groupMap = new Map<string, string[]>();
+  (memberships ?? []).forEach((membership) => {
+    const userId = membership.user_id as string;
+    const groupId = membership.group_id as string;
+    groupMap.set(userId, [...(groupMap.get(userId) ?? []), groupId]);
+  });
 
   return profiles.map((p) => ({
     ...p,
     email: emailMap.get(p.id) ?? "",
-    has_totp: totpMap.get(p.id) ?? false
+    has_totp: totpMap.get(p.id) ?? false,
+    group_ids: groupMap.get(p.id) ?? []
   }));
 }
 
@@ -243,7 +252,7 @@ export async function deleteGroup(groupId: string): Promise<{ error?: string }> 
 
 export async function updateUser(
   userId: string,
-  data: { display_name?: string; email?: string; username?: string }
+  data: { display_name?: string; email?: string; username?: string; group_ids?: string[] }
 ): Promise<{ error: string } | null> {
   await guardAdmin();
   const admin = createAdminClient();
@@ -260,6 +269,21 @@ export async function updateUser(
   if (Object.keys(profileUpdate).length > 0) {
     const { error } = await admin.from("profiles").update(profileUpdate).eq("id", userId);
     if (error) return { error: error.message };
+  }
+
+  if (data.group_ids) {
+    const { error: deleteError } = await admin.from("user_groups").delete().eq("user_id", userId);
+    if (deleteError) return { error: deleteError.message };
+
+    if (data.group_ids.length > 0) {
+      const { error: insertError } = await admin.from("user_groups").insert(
+        data.group_ids.map((groupId) => ({
+          user_id: userId,
+          group_id: groupId
+        }))
+      );
+      if (insertError) return { error: insertError.message };
+    }
   }
 
   return null;

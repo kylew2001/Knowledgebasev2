@@ -3,18 +3,51 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { iconOptions } from "@/lib/mock-data";
+import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
+import VisibilityEditor from "@/components/VisibilityEditor";
 
 const colorOptions = ["#0f766e", "#2563eb", "#b45309", "#7c3aed", "#be123c", "#475569"];
 
-type Props = { onClose: () => void };
+type Props = {
+  groups: VisibilityGroup[];
+  onClose: () => void;
+  onAdd: (category: {
+    title: string;
+    description: string;
+    count: number;
+    icon: (typeof iconOptions)[number]["icon"];
+    color: string;
+    tags: string[];
+    subcategories: string[];
+    visibility: VisibilityRule;
+    subcategoryVisibility: Record<string, VisibilityRule>;
+  }) => void;
+};
 
-export default function CardBuilderModal({ onClose }: Props) {
+export default function CardBuilderModal({ groups, onClose, onAdd }: Props) {
   const [selectedIcon, setSelectedIcon] = useState(iconOptions[0].name);
   const [selectedColor, setSelectedColor] = useState(colorOptions[0]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [visibility, setVisibility] = useState<VisibilityRule>({ mode: "everyone", groupIds: [] });
 
   const PreviewIcon = iconOptions.find((o) => o.name === selectedIcon)?.icon ?? iconOptions[0].icon;
+
+  function handleCreate() {
+    if (!name.trim()) return;
+    onAdd({
+      title: name.trim(),
+      description: description.trim(),
+      count: 0,
+      icon: PreviewIcon,
+      color: selectedColor,
+      tags: [],
+      subcategories: [],
+      visibility,
+      subcategoryVisibility: {}
+    });
+    onClose();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -101,6 +134,13 @@ export default function CardBuilderModal({ onClose }: Props) {
               </div>
             </div>
           </div>
+
+          <VisibilityEditor
+            label="Category visibility"
+            visibility={visibility}
+            groups={groups}
+            onChange={setVisibility}
+          />
         </div>
 
         <div className="mt-6 flex gap-3">
@@ -110,7 +150,11 @@ export default function CardBuilderModal({ onClose }: Props) {
           >
             Cancel
           </button>
-          <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800"
+          >
             Create category
           </button>
         </div>

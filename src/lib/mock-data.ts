@@ -20,6 +20,7 @@ import {
   UserCog,
   Wifi
 } from "lucide-react";
+import { type VisibilityRule } from "@/lib/visibility";
 
 export const iconOptions = [
   { name: "Book", icon: BookOpenText },
@@ -57,7 +58,9 @@ export const categoryCards = [
       "Licensing",
       "Exchange Rules",
       "Distribution Lists"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Active Directory",
@@ -73,7 +76,9 @@ export const categoryCards = [
       "Group Management",
       "GPO Issues",
       "Offboarding"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Networking",
@@ -89,7 +94,9 @@ export const categoryCards = [
       "Switch Ports",
       "Firewall Rules",
       "Connectivity Checks"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Printers",
@@ -105,7 +112,9 @@ export const categoryCards = [
       "MFD Setup",
       "Network Printers",
       "Fax Configuration"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Endpoints",
@@ -121,7 +130,9 @@ export const categoryCards = [
       "Peripheral Setup",
       "OS Reinstalls",
       "Device Compliance"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Security",
@@ -137,7 +148,9 @@ export const categoryCards = [
       "Access Reviews",
       "Incident Response",
       "Security Audits"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Telephony",
@@ -153,7 +166,9 @@ export const categoryCards = [
       "Call Recording",
       "Ring Groups",
       "Softphone Issues"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   },
   {
     title: "Phoenix",
@@ -170,7 +185,9 @@ export const categoryCards = [
       "Reporting",
       "Data Imports",
       "System Errors"
-    ]
+    ],
+    visibility: { mode: "everyone", groupIds: [] } as VisibilityRule,
+    subcategoryVisibility: {} as Record<string, VisibilityRule>
   }
 ];
 
@@ -185,6 +202,7 @@ export type MockPost = {
   subcategory: string;
   category: string;
   widgets?: import("@/lib/post-content").Widget[];
+  visibility?: VisibilityRule;
 };
 
 export const mockPosts: MockPost[] = [
