@@ -5,6 +5,8 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? DEFAULT_RESEND_FROM_EMAIL;
 const TEST_FROM_EMAIL =
   process.env.RESEND_TEST_FROM_EMAIL ?? process.env.RESEND_FROM_EMAIL ?? DEFAULT_RESEND_FROM_EMAIL;
 const TEST_TO_EMAIL = "kswalker2201@gmail.com";
+// When a domain is bought, add a verified domain email and send invites to the requested recipient.
+const INVITE_TO_EMAIL = "kswalker2201@gmail.com";
 
 function getResendClient(): Resend {
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -23,12 +25,13 @@ export async function sendInviteEmail(
   const resend = getResendClient();
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
-    to,
+    to: INVITE_TO_EMAIL,
     subject: "You've been invited to IT Support KB",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1e293b;">
         <h2 style="color: #0f766e;">You've been invited to IT Support KB</h2>
         <p>An administrator has created an account for you.</p>
+        <p><strong>Intended recipient:</strong> ${to}</p>
         <p><strong>Your username:</strong> ${username}</p>
         <p>
           To get started, visit <a href="${appUrl}" style="color: #0f766e;">${appUrl}</a>
