@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "IT Support KB <noreply@resend.dev>";
+const TEST_FROM_EMAIL = process.env.RESEND_TEST_FROM_EMAIL ?? process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+const TEST_TO_EMAIL = "kswalker2201@gmail.com";
 
 export async function sendInviteEmail(
   to: string,
@@ -85,5 +87,24 @@ export async function sendWelcomeEmail(to: string, username: string): Promise<vo
     });
   } catch (err) {
     console.error("[sendWelcomeEmail]", err);
+  }
+}
+
+export async function sendResendTestEmail(): Promise<void> {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    throw new Error("RESEND_API_KEY is not configured.");
+  }
+
+  const resend = new Resend(resendApiKey);
+  const { error } = await resend.emails.send({
+    from: TEST_FROM_EMAIL,
+    to: TEST_TO_EMAIL,
+    subject: "IT Support KB test email",
+    html: "<p>Congrats on sending your <strong>first IT Support KB test email</strong>!</p>"
+  });
+
+  if (error) {
+    throw new Error(error.message);
   }
 }

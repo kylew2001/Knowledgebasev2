@@ -7,6 +7,7 @@ import {
   KeyRound,
   Lock,
   LockOpen,
+  Mail,
   Pencil,
   ShieldCheck,
   UserPlus,
@@ -22,6 +23,7 @@ import {
   toggleUserDisabled,
   sendPasswordReset,
   resetUserTwoFactor,
+  sendAdminTestEmail,
   saveSecuritySettings
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
@@ -81,6 +83,9 @@ export function AdminDashboard({
   const [secPending, startSecTransition] = useTransition();
   const [secSaved, setSecSaved] = useState(false);
   const [secError, setSecError] = useState<string | null>(null);
+  const [testEmailPending, startTestEmailTransition] = useTransition();
+  const [testEmailStatus, setTestEmailStatus] = useState<"sent" | "error" | null>(null);
+  const [testEmailError, setTestEmailError] = useState<string | null>(null);
 
   function handleSaved(userId: string, updated: Partial<AdminUser>) {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updated } : u)));
@@ -141,6 +146,21 @@ export function AdminDashboard({
       }
       setSecSaved(true);
       setTimeout(() => setSecSaved(false), 2000);
+    });
+  }
+
+  function handleSendTestEmail() {
+    setTestEmailStatus(null);
+    setTestEmailError(null);
+    startTestEmailTransition(async () => {
+      const result = await sendAdminTestEmail();
+      if (result?.error) {
+        setTestEmailStatus("error");
+        setTestEmailError(result.error);
+        return;
+      }
+      setTestEmailStatus("sent");
+      setTimeout(() => setTestEmailStatus(null), 3000);
     });
   }
 
@@ -337,6 +357,27 @@ export function AdminDashboard({
             <ShieldCheck className="h-4 w-4" />
             {secSaved ? "Saved!" : secPending ? "Saving…" : "Save Security Settings"}
           </button>
+
+          <div className="mt-5 border-t border-line pt-5">
+            <h4 className="text-sm font-bold text-ink">Email integration</h4>
+            <p className="mt-1 text-sm text-slate-500">
+              Send a Resend test email to kswalker2201@gmail.com.
+            </p>
+            {testEmailStatus === "error" && (
+              <p className="mt-3 text-sm text-red-600">{testEmailError}</p>
+            )}
+            {testEmailStatus === "sent" && (
+              <p className="mt-3 text-sm font-semibold text-teal-700">Test email sent.</p>
+            )}
+            <button
+              onClick={handleSendTestEmail}
+              disabled={testEmailPending}
+              className="focus-ring mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel disabled:opacity-50"
+            >
+              <Mail className="h-4 w-4" />
+              {testEmailPending ? "Sending..." : "Send Test Email"}
+            </button>
+          </div>
         </div>
       </section>
 

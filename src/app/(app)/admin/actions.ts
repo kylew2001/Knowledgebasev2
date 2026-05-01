@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, isSuperAdmin } from "@/lib/auth";
+import { sendResendTestEmail } from "@/lib/email";
 import { redirect } from "next/navigation";
 
 export type AdminUser = {
@@ -257,6 +258,21 @@ export async function saveSecuritySettings(settings: SecuritySettings): Promise<
   if (error) return { error: error.message };
 
   await writeAuditLog(admin, current.profile.id, "settings_updated", "Security settings");
+
+  return null;
+}
+
+export async function sendAdminTestEmail(): Promise<{ error: string } | null> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  try {
+    await sendResendTestEmail();
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send test email" };
+  }
+
+  await writeAuditLog(admin, current.profile.id, "settings_updated", "Resend test email sent");
 
   return null;
 }
