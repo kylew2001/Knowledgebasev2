@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import {
   Activity,
   Building2,
+  ChevronDown,
+  ChevronRight,
   Database,
   FolderTree,
   KeyRound,
@@ -15,7 +17,8 @@ import {
   ShieldCheck,
   Trash2,
   UserPlus,
-  Users
+  Users,
+  X
 } from "lucide-react";
 import {
   type AdminGroup,
@@ -77,6 +80,8 @@ export function AdminDashboard({
   const [groups, setGroups] = useState(initialGroups);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupForm, setGroupForm] = useState<GroupForm>({
     id: null,
     name: "",
@@ -127,6 +132,13 @@ export function AdminDashboard({
     setGroupError(null);
   }
 
+  function openNewGroup(parentId = "") {
+    setGroupForm({ id: null, name: "", description: "", parent_id: parentId });
+    setGroupError(null);
+    setGroupSaved(false);
+    setShowGroupModal(true);
+  }
+
   function startEditingGroup(group: AdminGroup) {
     setGroupForm({
       id: group.id,
@@ -135,6 +147,8 @@ export function AdminDashboard({
       parent_id: group.parent_id ?? ""
     });
     setGroupError(null);
+    setGroupSaved(false);
+    setShowGroupModal(true);
   }
 
   function getGroupAndDescendantIds(groupId: string) {
@@ -185,6 +199,7 @@ export function AdminDashboard({
       });
       setGroupSaved(true);
       resetGroupForm();
+      setShowGroupModal(false);
       setTimeout(() => setGroupSaved(false), 2000);
     });
   }
@@ -317,6 +332,14 @@ export function AdminDashboard({
           <div className="flex shrink-0 gap-2">
             <button
               type="button"
+              title="Add subgroup"
+              onClick={() => openNewGroup(group.id)}
+              className={`focus-ring rounded-lg border border-line p-2 hover:bg-panel ${isRoot ? "" : "bg-white"}`}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               title={isRoot ? "Edit group" : "Edit subgroup"}
               onClick={() => startEditingGroup(group)}
               className={`focus-ring rounded-lg border border-line p-2 hover:bg-panel ${isRoot ? "" : "bg-white"}`}
@@ -368,88 +391,6 @@ export function AdminDashboard({
             </div>
           );
         })}
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
-        <div className="rounded-lg border border-line bg-white p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-bold text-ink">Groups and departments</h3>
-              <p className="text-sm text-slate-500">Use parent groups for departments and subgroups for teams.</p>
-            </div>
-            <FolderTree className="h-5 w-5 text-brand" />
-          </div>
-
-          {rootGroups.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-slate-500">
-              No groups yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {rootGroups.map((group) => renderGroup(group))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-lg border border-line bg-white p-4">
-          <h3 className="text-lg font-bold text-ink">{groupForm.id ? "Edit group" : "New group"}</h3>
-          <div className="mt-4 space-y-4">
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Name</span>
-              <input
-                value={groupForm.name}
-                onChange={(e) => setGroupForm((prev) => ({ ...prev, name: e.target.value }))}
-                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Parent group</span>
-              <select
-                value={groupForm.parent_id}
-                onChange={(e) => setGroupForm((prev) => ({ ...prev, parent_id: e.target.value }))}
-                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line bg-white px-3"
-              >
-                <option value="">No parent group</option>
-                {parentOptions.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.parent_id ? "  - " : ""}{group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Description</span>
-              <textarea
-                value={groupForm.description}
-                onChange={(e) => setGroupForm((prev) => ({ ...prev, description: e.target.value }))}
-                rows={3}
-                className="focus-ring mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm"
-              />
-            </label>
-          </div>
-          {groupError && <p className="mt-3 text-sm text-red-600">{groupError}</p>}
-          {groupSaved && <p className="mt-3 text-sm font-semibold text-teal-700">Group saved.</p>}
-          <div className="mt-5 flex gap-3">
-            {groupForm.id && (
-              <button
-                type="button"
-                onClick={resetGroupForm}
-                className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveGroup}
-              disabled={groupPending}
-              className="focus-ring inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" />
-              {groupPending ? "Saving..." : groupForm.id ? "Save Group" : "Add Group"}
-            </button>
-          </div>
-        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
@@ -651,6 +592,66 @@ export function AdminDashboard({
         </div>
       </section>
 
+      <section className="rounded-lg border border-line bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => setShowGroups((open) => !open)}
+            className="focus-ring flex min-w-0 items-center gap-3 rounded-lg text-left"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-brand">
+              <FolderTree className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold text-ink">Groups and departments</span>
+              <span className="block text-sm text-slate-500">
+                {groups.length} group{groups.length !== 1 ? "s" : ""} configured
+              </span>
+            </span>
+            {showGroups ? (
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-400" />
+            ) : (
+              <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+            )}
+          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => openNewGroup()}
+              className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink hover:bg-panel"
+            >
+              <Plus className="h-4 w-4" />
+              Department
+            </button>
+            <button
+              type="button"
+              onClick={() => openNewGroup(rootGroups[0]?.id ?? "")}
+              className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"
+            >
+              <Plus className="h-4 w-4" />
+              Group
+            </button>
+          </div>
+        </div>
+
+        {groupSaved && <p className="mt-3 text-sm font-semibold text-teal-700">Group saved.</p>}
+        {groupError && !showGroupModal && <p className="mt-3 text-sm text-red-600">{groupError}</p>}
+
+        {showGroups && (
+          <div className="mt-4 border-t border-line pt-4">
+            {rootGroups.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-slate-500">
+                No departments or groups yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {rootGroups.map((group) => renderGroup(group))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Audit logs */}
       <section className="rounded-lg border border-line bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -700,6 +701,90 @@ export function AdminDashboard({
             setEditingUser(null);
           }}
         />
+      )}
+      {showGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-line bg-white p-6 shadow-soft">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-ink">{groupForm.id ? "Edit group" : "New group"}</h3>
+                <p className="text-sm text-slate-500">
+                  Choose no parent for a department, or choose a parent to make a subgroup.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGroupModal(false);
+                  resetGroupForm();
+                }}
+                className="focus-ring rounded-lg p-1 hover:bg-panel"
+              >
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Name</span>
+                <input
+                  autoFocus
+                  value={groupForm.name}
+                  onChange={(e) => setGroupForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Parent group</span>
+                <select
+                  value={groupForm.parent_id}
+                  onChange={(e) => setGroupForm((prev) => ({ ...prev, parent_id: e.target.value }))}
+                  className="focus-ring mt-2 h-11 w-full rounded-lg border border-line bg-white px-3"
+                >
+                  <option value="">No parent group</option>
+                  {parentOptions.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.parent_id ? "  - " : ""}{group.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Description</span>
+                <textarea
+                  value={groupForm.description}
+                  onChange={(e) => setGroupForm((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="focus-ring mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
+            {groupError && <p className="mt-3 text-sm text-red-600">{groupError}</p>}
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowGroupModal(false);
+                  resetGroupForm();
+                }}
+                className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveGroup}
+                disabled={groupPending}
+                className="focus-ring inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                {groupPending ? "Saving..." : groupForm.id ? "Save Group" : "Add Group"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
