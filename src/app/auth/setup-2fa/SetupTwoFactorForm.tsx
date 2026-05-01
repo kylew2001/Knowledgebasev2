@@ -20,7 +20,11 @@ export function SetupTwoFactorForm() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    supabase.auth.mfa.enroll({ factorType: "totp" }).then(({ data, error }) => {
+    supabase.auth.mfa.enroll({
+      factorType: "totp",
+      friendlyName: "Knowledge Base",
+      issuer: "Knowledge Base"
+    }).then(({ data, error }) => {
       if (error || !data) {
         setError("Failed to start authenticator setup. Please refresh and try again.");
         setEnrolling(false);
