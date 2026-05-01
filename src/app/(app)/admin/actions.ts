@@ -12,6 +12,8 @@ export type AdminUser = {
   role: string;
   disabled_at: string | null;
   last_login_at: string | null;
+  totp_setup_required: boolean;
+  has_totp: boolean;
 };
 
 export type SecuritySettings = {
@@ -65,14 +67,26 @@ export async function listUsers(): Promise<AdminUser[]> {
   const admin = createAdminClient();
 
   const [{ data: profiles }, { data: authData }] = await Promise.all([
-    admin.from("profiles").select("id, display_name, username, role, disabled_at, last_login_at"),
+    admin.from("profiles").select("id, display_name, username, role, disabled_at, last_login_at, totp_setup_required"),
     admin.auth.admin.listUsers({ perPage: 1000 })
   ]);
 
   if (!profiles) return [];
   const emailMap = new Map((authData?.users ?? []).map((u) => [u.id, u.email ?? ""]));
+  const totpMap = new Map(
+    (authData?.users ?? []).map((u) => [
+      u.id,
+      (u.factors ?? []).some(
+        (factor) => factor.factor_type === "totp" && factor.status === "verified"
+      )
+    ])
+  );
 
-  return profiles.map((p) => ({ ...p, email: emailMap.get(p.id) ?? "" }));
+  return profiles.map((p) => ({
+    ...p,
+    email: emailMap.get(p.id) ?? "",
+    has_totp: totpMap.get(p.id) ?? false
+  }));
 }
 
 export async function updateUser(
@@ -109,8 +123,15 @@ export async function updateUserRole(userId: string, role: string): Promise<{ er
     .eq("id", userId)
     .single();
 
-  const { error } = await admin.from("profiles").update({ role }).eq("id", userId);
+  const [{ data: authUser }, { error }] = await Promise.all([
+    admin.auth.admin.getUserById(userId),
+    admin.from("profiles").update({ role }).eq("id", userId)
+  ]);
   if (error) return { error: error.message };
+
+  await admin.auth.admin.updateUserById(userId, {
+    app_metadata: { ...(authUser?.user?.app_metadata ?? {}), role }
+  });
 
   const displayName = profile?.display_name ?? profile?.username ?? userId;
   await writeAuditLog(
@@ -168,6 +189,43 @@ export async function sendPasswordReset(userId: string): Promise<{ error: string
 
   const displayName = profile?.display_name ?? profile?.username ?? userId;
   await writeAuditLog(admin, current.profile.id, "password_reset", displayName, "profiles", userId);
+
+  return null;
+}
+
+export async function resetUserTwoFactor(userId: string): Promise<{ error: string } | null> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  const [{ data: profile }, { data: authUser, error: userError }] = await Promise.all([
+    admin.from("profiles").select("display_name, username").eq("id", userId).single(),
+    admin.auth.admin.getUserById(userId)
+  ]);
+
+  if (userError || !authUser?.user) {
+    return { error: userError?.message ?? "User not found" };
+  }
+
+  const factors = authUser.user.factors ?? [];
+  const totpFactors = factors.filter((factor) => factor.factor_type === "totp");
+
+  for (const factor of totpFactors) {
+    const { error } = await admin.auth.admin.mfa.deleteFactor({
+      id: factor.id,
+      userId
+    });
+    if (error) return { error: error.message };
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ totp_setup_required: true })
+    .eq("id", userId);
+
+  if (error) return { error: error.message };
+
+  const displayName = profile?.display_name ?? profile?.username ?? userId;
+  await writeAuditLog(admin, current.profile.id, "two_fa_reset", displayName, "profiles", userId);
 
   return null;
 }

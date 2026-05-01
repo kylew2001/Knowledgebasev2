@@ -21,6 +21,7 @@ import {
   updateUserRole,
   toggleUserDisabled,
   sendPasswordReset,
+  resetUserTwoFactor,
   saveSecuritySettings
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
@@ -72,6 +73,8 @@ export function AdminDashboard({
   // Password reset state
   const [resetSent, setResetSent] = useState<Record<string, boolean>>({});
   const [, startResetTransition] = useTransition();
+  const [twoFaResetSent, setTwoFaResetSent] = useState<Record<string, boolean>>({});
+  const [, startTwoFaResetTransition] = useTransition();
 
   // Security settings form state
   const [secForm, setSecForm] = useState<SecuritySettings>(securitySettings);
@@ -109,6 +112,22 @@ export function AdminDashboard({
       await sendPasswordReset(userId);
       setResetSent((prev) => ({ ...prev, [userId]: true }));
       setTimeout(() => setResetSent((prev) => ({ ...prev, [userId]: false })), 2000);
+    });
+  }
+
+  function handleTwoFaReset(userId: string) {
+    startTwoFaResetTransition(async () => {
+      const result = await resetUserTwoFactor(userId);
+      if (result?.error) return;
+      setTwoFaResetSent((prev) => ({ ...prev, [userId]: true }));
+      setUsers((prev) =>
+        prev.map((user) =>
+          user.id === userId
+            ? { ...user, has_totp: false, totp_setup_required: true }
+            : user
+        )
+      );
+      setTimeout(() => setTwoFaResetSent((prev) => ({ ...prev, [userId]: false })), 2000);
     });
   }
 
@@ -187,6 +206,9 @@ export function AdminDashboard({
                         <p className="font-semibold text-ink">{user.display_name || user.username || "—"}</p>
                         <p className="text-slate-500">{user.email}</p>
                         {user.username && <p className="text-xs text-slate-400">@{user.username}</p>}
+                        <p className="mt-1 text-xs text-slate-400">
+                          2FA: {user.has_totp ? "Configured" : user.totp_setup_required ? "Setup required" : "Not configured"}
+                        </p>
                       </td>
                       <td className="border-b border-line px-3 py-3">
                         <select
@@ -245,6 +267,17 @@ export function AdminDashboard({
                               <LockOpen className="h-4 w-4 text-amber-600" />
                             ) : (
                               <Lock className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            title="Reset 2FA"
+                            onClick={() => handleTwoFaReset(user.id)}
+                            className="focus-ring rounded-lg border border-line p-2 hover:bg-panel"
+                          >
+                            {twoFaResetSent[user.id] ? (
+                              <span className="text-xs font-semibold text-teal-700">Reset!</span>
+                            ) : (
+                              <ShieldCheck className="h-4 w-4" />
                             )}
                           </button>
                         </div>

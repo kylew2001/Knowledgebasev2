@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LockKeyhole, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import {
   checkUsername,
+  completeMfaVerification,
   signInWithUsername,
   setInitialPassword,
   verifyEmailOtp,
@@ -161,6 +162,7 @@ export default function LoginForm() {
         setError("Invalid code. Please try again.");
         return;
       }
+      await completeMfaVerification();
       router.push("/knowledge-base");
     });
   }
