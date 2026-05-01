@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useState, type ChangeEvent, type CSSProperties } from "react";
 import {
   AlertTriangle,
   Bold,
@@ -323,6 +323,22 @@ export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets 
     setDraft((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
   }
 
+  function handleImageSelected(widget: ImageWidget, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      updateWidget({
+        ...widget,
+        src: reader.result,
+        caption: widget.caption || file.name.replace(/\.[^/.]+$/, "")
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   const current = editing ? draft : widgets;
   const derivedType = derivePostType(current);
   const cfg = getTypeConfig(derivedType);
@@ -434,7 +450,17 @@ export function PostPage({ post, userRole, onBack, categoryTitle, onSaveWidgets 
                 )}
                 {widget.type === "image" && editing && (
                   <div className="space-y-2">
-                    <input type="file" accept="image/*" className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" />
+                    {widget.src && (
+                      <figure className="space-y-2">
+                        <img src={widget.src} alt={widget.caption} className="max-h-80 rounded-lg border border-line object-contain" />
+                      </figure>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageSelected(widget, e)}
+                      className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                    />
                     <input value={widget.caption} onChange={(e) => updateWidget({ ...widget, caption: e.target.value })} placeholder="Caption (optional)" className="focus-ring h-9 w-full rounded-lg border border-line px-3 text-sm" />
                   </div>
                 )}
