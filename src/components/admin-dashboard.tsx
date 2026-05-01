@@ -3,21 +3,28 @@
 import { useState, useTransition } from "react";
 import {
   Activity,
+  Building2,
   Database,
+  FolderTree,
   KeyRound,
   Lock,
   LockOpen,
   Mail,
   Pencil,
+  Plus,
   ShieldCheck,
+  Trash2,
   UserPlus,
   Users
 } from "lucide-react";
 import {
+  type AdminGroup,
   type AdminUser,
   type SecuritySettings,
   type AuditLog,
   type StorageStats,
+  createGroup,
+  deleteGroup,
   updateUser,
   updateUserRole,
   toggleUserDisabled,
@@ -25,17 +32,26 @@ import {
   resendUserInvite,
   resetUserTwoFactor,
   sendAdminTestEmail,
-  saveSecuritySettings
+  saveSecuritySettings,
+  updateGroup
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
 import NewUserModal from "@/components/NewUserModal";
 
 type Props = {
   users: AdminUser[];
+  groups: AdminGroup[];
   securitySettings: SecuritySettings;
   auditLogs: AuditLog[];
   auditTotal: number;
   storageStats: StorageStats;
+};
+
+type GroupForm = {
+  id: string | null;
+  name: string;
+  description: string;
+  parent_id: string;
 };
 
 function formatBytes(b: number) {
@@ -51,14 +67,25 @@ function fmtAction(a: string) {
 
 export function AdminDashboard({
   users: initialUsers,
+  groups: initialGroups,
   securitySettings,
   auditLogs,
   auditTotal,
   storageStats
 }: Props) {
   const [users, setUsers] = useState(initialUsers);
+  const [groups, setGroups] = useState(initialGroups);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
+  const [groupForm, setGroupForm] = useState<GroupForm>({
+    id: null,
+    name: "",
+    description: "",
+    parent_id: ""
+  });
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [groupSaved, setGroupSaved] = useState(false);
+  const [groupPending, startGroupTransition] = useTransition();
 
   // Role select state
   const [userRoles, setUserRoles] = useState<Record<string, string>>(
@@ -93,6 +120,90 @@ export function AdminDashboard({
 
   function handleSaved(userId: string, updated: Partial<AdminUser>) {
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...updated } : u)));
+  }
+
+  function resetGroupForm() {
+    setGroupForm({ id: null, name: "", description: "", parent_id: "" });
+    setGroupError(null);
+  }
+
+  function startEditingGroup(group: AdminGroup) {
+    setGroupForm({
+      id: group.id,
+      name: group.name,
+      description: group.description ?? "",
+      parent_id: group.parent_id ?? ""
+    });
+    setGroupError(null);
+  }
+
+  function getGroupAndDescendantIds(groupId: string) {
+    const ids = new Set([groupId]);
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      groups.forEach((group) => {
+        if (group.parent_id && ids.has(group.parent_id) && !ids.has(group.id)) {
+          ids.add(group.id);
+          changed = true;
+        }
+      });
+    }
+
+    return ids;
+  }
+
+  function isInvalidParentOption(parentId: string) {
+    if (!groupForm.id) return false;
+    return getGroupAndDescendantIds(groupForm.id).has(parentId);
+  }
+
+  function handleSaveGroup() {
+    setGroupError(null);
+    setGroupSaved(false);
+    startGroupTransition(async () => {
+      const payload = {
+        name: groupForm.name,
+        description: groupForm.description,
+        parent_id: groupForm.parent_id || null
+      };
+      const result = groupForm.id
+        ? await updateGroup(groupForm.id, payload)
+        : await createGroup(payload);
+
+      if (result.error || !result.group) {
+        setGroupError(result.error ?? "Group could not be saved.");
+        return;
+      }
+
+      setGroups((prev) => {
+        const exists = prev.some((group) => group.id === result.group!.id);
+        return exists
+          ? prev.map((group) => (group.id === result.group!.id ? result.group! : group))
+          : [...prev, result.group!];
+      });
+      setGroupSaved(true);
+      resetGroupForm();
+      setTimeout(() => setGroupSaved(false), 2000);
+    });
+  }
+
+  function handleDeleteGroup(group: AdminGroup) {
+    if (!window.confirm(`Delete ${group.name} and any subgroups?`)) return;
+
+    setGroupError(null);
+    startGroupTransition(async () => {
+      const result = await deleteGroup(group.id);
+      if (result.error) {
+        setGroupError(result.error);
+        return;
+      }
+
+      const deletedIds = getGroupAndDescendantIds(group.id);
+      setGroups((prev) => prev.filter((item) => !deletedIds.has(item.id)));
+      if (groupForm.id && deletedIds.has(groupForm.id)) resetGroupForm();
+    });
   }
 
   function handleRoleChange(userId: string, role: string) {
@@ -182,6 +293,55 @@ export function AdminDashboard({
   }
 
   const lockedCount = Object.values(localDisabled).filter(Boolean).length;
+  const sortedGroups = [...groups].sort((a, b) => a.name.localeCompare(b.name));
+  const rootGroups = sortedGroups.filter((group) => !group.parent_id);
+  const childGroups = sortedGroups.filter((group) => group.parent_id);
+  const parentOptions = sortedGroups.filter((group) => !isInvalidParentOption(group.id));
+
+  function renderGroup(group: AdminGroup, depth = 0) {
+    const children = childGroups.filter((child) => child.parent_id === group.id);
+    const isRoot = depth === 0;
+
+    return (
+      <div key={group.id} className={isRoot ? "rounded-lg border border-line p-3" : "rounded-lg bg-panel p-3"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${isRoot ? "bg-teal-50 text-brand" : "bg-white text-slate-500"}`}>
+              {isRoot ? <Building2 className="h-5 w-5" /> : <FolderTree className="h-5 w-5" />}
+            </span>
+            <div className="min-w-0">
+              <p className={isRoot ? "font-bold text-ink" : "font-semibold text-ink"}>{group.name}</p>
+              {group.description && <p className="text-sm text-slate-500">{group.description}</p>}
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              title={isRoot ? "Edit group" : "Edit subgroup"}
+              onClick={() => startEditingGroup(group)}
+              className={`focus-ring rounded-lg border border-line p-2 hover:bg-panel ${isRoot ? "" : "bg-white"}`}
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title={isRoot ? "Delete group" : "Delete subgroup"}
+              onClick={() => handleDeleteGroup(group)}
+              className={`focus-ring rounded-lg border border-line p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 ${isRoot ? "" : "bg-white"}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {children.length > 0 && (
+          <div className="mt-3 space-y-2 border-l border-line pl-4">
+            {children.map((child) => renderGroup(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -191,16 +351,13 @@ export function AdminDashboard({
       </header>
 
       {/* Stats */}
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {[
           { label: "Users", value: String(users.length), icon: Users },
+          { label: "Groups", value: String(groups.length), icon: FolderTree },
           { label: "Locked Accounts", value: String(lockedCount), icon: Lock },
           { label: "Audit Events", value: String(auditTotal), icon: Activity },
-          {
-            label: "Storage Used",
-            value: `${formatBytes(storageStats.used_bytes)} / ${formatBytes(storageStats.total_bytes)}`,
-            icon: Database
-          }
+          { label: "Storage Used", value: `${formatBytes(storageStats.used_bytes)} / ${formatBytes(storageStats.total_bytes)}`, icon: Database }
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -211,6 +368,88 @@ export function AdminDashboard({
             </div>
           );
         })}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
+        <div className="rounded-lg border border-line bg-white p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-ink">Groups and departments</h3>
+              <p className="text-sm text-slate-500">Use parent groups for departments and subgroups for teams.</p>
+            </div>
+            <FolderTree className="h-5 w-5 text-brand" />
+          </div>
+
+          {rootGroups.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-line p-6 text-center text-sm text-slate-500">
+              No groups yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {rootGroups.map((group) => renderGroup(group))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-line bg-white p-4">
+          <h3 className="text-lg font-bold text-ink">{groupForm.id ? "Edit group" : "New group"}</h3>
+          <div className="mt-4 space-y-4">
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Name</span>
+              <input
+                value={groupForm.name}
+                onChange={(e) => setGroupForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Parent group</span>
+              <select
+                value={groupForm.parent_id}
+                onChange={(e) => setGroupForm((prev) => ({ ...prev, parent_id: e.target.value }))}
+                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line bg-white px-3"
+              >
+                <option value="">No parent group</option>
+                {parentOptions.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.parent_id ? "  - " : ""}{group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Description</span>
+              <textarea
+                value={groupForm.description}
+                onChange={(e) => setGroupForm((prev) => ({ ...prev, description: e.target.value }))}
+                rows={3}
+                className="focus-ring mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+          {groupError && <p className="mt-3 text-sm text-red-600">{groupError}</p>}
+          {groupSaved && <p className="mt-3 text-sm font-semibold text-teal-700">Group saved.</p>}
+          <div className="mt-5 flex gap-3">
+            {groupForm.id && (
+              <button
+                type="button"
+                onClick={resetGroupForm}
+                className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveGroup}
+              disabled={groupPending}
+              className="focus-ring inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              {groupPending ? "Saving..." : groupForm.id ? "Save Group" : "Add Group"}
+            </button>
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_420px]">

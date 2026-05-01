@@ -36,6 +36,15 @@ export type StorageStats = {
   total_bytes: number;
 };
 
+export type AdminGroup = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type MfaFactor = {
   id: string;
   factor_type?: string;
@@ -111,6 +120,125 @@ export async function listUsers(): Promise<AdminUser[]> {
     email: emailMap.get(p.id) ?? "",
     has_totp: totpMap.get(p.id) ?? false
   }));
+}
+
+export async function listGroups(): Promise<AdminGroup[]> {
+  await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("groups")
+    .select("id, parent_id, name, description, created_at, updated_at")
+    .order("name", { ascending: true });
+
+  if (error) return [];
+
+  return (data ?? []) as AdminGroup[];
+}
+
+export async function createGroup(data: {
+  name: string;
+  description?: string;
+  parent_id?: string | null;
+}): Promise<{ group?: AdminGroup; error?: string }> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+  const name = data.name.trim();
+  const description = data.description?.trim() || null;
+  const parentId = data.parent_id || null;
+
+  if (!name) return { error: "Group name is required." };
+
+  const { data: group, error } = await admin
+    .from("groups")
+    .insert({
+      name,
+      description,
+      parent_id: parentId,
+      created_by: current.profile.id
+    })
+    .select("id, parent_id, name, description, created_at, updated_at")
+    .single();
+
+  if (error) return { error: error.message };
+
+  await writeAuditLog(admin, current.profile.id, "group_created", name, "groups", group.id);
+
+  return { group: group as AdminGroup };
+}
+
+function isDescendant(
+  groups: Pick<AdminGroup, "id" | "parent_id">[],
+  possibleParentId: string,
+  groupId: string
+) {
+  let currentId: string | null = possibleParentId;
+
+  while (currentId) {
+    if (currentId === groupId) return true;
+    currentId = groups.find((group) => group.id === currentId)?.parent_id ?? null;
+  }
+
+  return false;
+}
+
+export async function updateGroup(
+  groupId: string,
+  data: { name: string; description?: string; parent_id?: string | null }
+): Promise<{ group?: AdminGroup; error?: string }> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+  const name = data.name.trim();
+  const description = data.description?.trim() || null;
+  const parentId = data.parent_id || null;
+
+  if (!name) return { error: "Group name is required." };
+  if (parentId === groupId) return { error: "A group cannot be its own parent." };
+
+  if (parentId) {
+    const { data: groups } = await admin.from("groups").select("id, parent_id");
+    if (isDescendant((groups ?? []) as Pick<AdminGroup, "id" | "parent_id">[], parentId, groupId)) {
+      return { error: "A group cannot be moved inside one of its subgroups." };
+    }
+  }
+
+  const { data: group, error } = await admin
+    .from("groups")
+    .update({ name, description, parent_id: parentId })
+    .eq("id", groupId)
+    .select("id, parent_id, name, description, created_at, updated_at")
+    .single();
+
+  if (error) return { error: error.message };
+
+  await writeAuditLog(admin, current.profile.id, "group_updated", name, "groups", groupId);
+
+  return { group: group as AdminGroup };
+}
+
+export async function deleteGroup(groupId: string): Promise<{ error?: string }> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data: group } = await admin
+    .from("groups")
+    .select("name")
+    .eq("id", groupId)
+    .single();
+
+  const { error } = await admin.from("groups").delete().eq("id", groupId);
+  if (error) return { error: error.message };
+
+  await writeAuditLog(
+    admin,
+    current.profile.id,
+    "group_deleted",
+    group?.name ?? groupId,
+    "groups",
+    groupId
+  );
+
+  return {};
 }
 
 export async function updateUser(
