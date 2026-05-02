@@ -86,6 +86,9 @@ function getPostSearchText(post: MockPost) {
       if (widget.type === "code") return `${widget.language} ${widget.filename ?? ""} ${widget.content}`;
       if (widget.type === "steps") return `${widget.title ?? ""} ${widget.steps.map((step) => step.text).join(" ")}`;
       if (widget.type === "checklist") return `${widget.title ?? ""} ${widget.items.map((item) => item.text).join(" ")}`;
+      if (widget.type === "table") return `${widget.title ?? ""} ${widget.columns.join(" ")} ${widget.rows.flat().join(" ")}`;
+      if (widget.type === "quote") return `${widget.content} ${widget.source ?? ""}`;
+      if (widget.type === "link") return `${widget.label} ${widget.url} ${widget.description ?? ""}`;
       if (widget.type === "image") return `${widget.caption} ${widget.src}`;
       if (widget.type === "pdf") return widget.filename;
       return "";

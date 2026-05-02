@@ -38,6 +38,26 @@ export type StepsWidget = {
   title?: string;
   steps: { id: string; text: string }[];
 };
+export type TableWidget = {
+  id: string;
+  type: "table";
+  title?: string;
+  columns: string[];
+  rows: string[][];
+};
+export type QuoteWidget = {
+  id: string;
+  type: "quote";
+  content: string;
+  source?: string;
+};
+export type LinkWidget = {
+  id: string;
+  type: "link";
+  label: string;
+  url: string;
+  description?: string;
+};
 export type DividerWidget = { id: string; type: "divider" };
 
 export type Widget =
@@ -48,6 +68,9 @@ export type Widget =
   | CodeWidget
   | ChecklistWidget
   | StepsWidget
+  | TableWidget
+  | QuoteWidget
+  | LinkWidget
   | DividerWidget;
 
 export const defaultContent: Record<string, Widget[]> = {
@@ -88,6 +111,9 @@ export function derivePostType(
       widget.type === "code" ||
       widget.type === "checklist" ||
       widget.type === "steps" ||
+      widget.type === "table" ||
+      widget.type === "quote" ||
+      widget.type === "link" ||
       widget.type === "image" ||
       widget.type === "divider"
   );

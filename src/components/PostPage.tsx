@@ -9,6 +9,7 @@ import {
   Check,
   Clipboard,
   Code2,
+  ExternalLink,
   FileText,
   Home,
   Image as ImageIcon,
@@ -23,6 +24,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Table2,
   Trash2,
   Type,
   Underline,
@@ -53,9 +55,23 @@ type CalloutWidget = { id: string; type: "callout"; variant: "info" | "warning" 
 type CodeWidget    = { id: string; type: "code"; language: string; filename?: string; content: string };
 type ChecklistWidget = { id: string; type: "checklist"; title?: string; items: { id: string; text: string; checked: boolean }[] };
 type StepsWidget = { id: string; type: "steps"; title?: string; steps: { id: string; text: string }[] };
+type TableWidget = { id: string; type: "table"; title?: string; columns: string[]; rows: string[][] };
+type QuoteWidget = { id: string; type: "quote"; content: string; source?: string };
+type LinkWidget = { id: string; type: "link"; label: string; url: string; description?: string };
 type DividerWidget = { id: string; type: "divider" };
 
-type Widget = TextWidget | ImageWidget | PdfWidget | CalloutWidget | CodeWidget | ChecklistWidget | StepsWidget | DividerWidget;
+type Widget =
+  | TextWidget
+  | ImageWidget
+  | PdfWidget
+  | CalloutWidget
+  | CodeWidget
+  | ChecklistWidget
+  | StepsWidget
+  | TableWidget
+  | QuoteWidget
+  | LinkWidget
+  | DividerWidget;
 
 // ── Sample default content for seeded posts ─────────────────────────────────
 
@@ -93,6 +109,9 @@ const widgetTypes = [
   { type: "code"    as const, label: "Code",    icon: Code2        },
   { type: "steps"   as const, label: "Steps",   icon: ListOrdered  },
   { type: "checklist" as const, label: "Checklist", icon: ListChecks },
+  { type: "table"   as const, label: "Table",   icon: Table2       },
+  { type: "quote"   as const, label: "Quote",   icon: BookOpen     },
+  { type: "link"    as const, label: "Link",    icon: ExternalLink },
   { type: "divider" as const, label: "Divider", icon: Minus        },
 ];
 
@@ -105,6 +124,9 @@ function blankWidget(type: Widget["type"]): Widget {
     case "code":    return { id: newId(), type: "code", language: "PowerShell", filename: "", content: "" };
     case "steps":   return { id: newId(), type: "steps", title: "", steps: [{ id: newId(), text: "" }] };
     case "checklist": return { id: newId(), type: "checklist", title: "", items: [{ id: newId(), text: "", checked: false }] };
+    case "table":   return { id: newId(), type: "table", title: "", columns: ["Item", "Details"], rows: [["", ""]] };
+    case "quote":   return { id: newId(), type: "quote", content: "", source: "" };
+    case "link":    return { id: newId(), type: "link", label: "", url: "", description: "" };
     case "divider": return { id: newId(), type: "divider" };
   }
 }
@@ -838,6 +860,238 @@ function StepsWidgetEditor({
   );
 }
 
+function normaliseHref(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function TableWidgetView({ w }: { w: TableWidget }) {
+  return (
+    <div className="space-y-3">
+      {w.title && <h3 className="text-sm font-bold text-ink">{w.title}</h3>}
+      <div className="overflow-x-auto rounded-lg border border-line">
+        <table className="min-w-full divide-y divide-line text-sm">
+          <thead className="bg-panel">
+            <tr>
+              {w.columns.map((column, index) => (
+                <th key={`${column}-${index}`} className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {column || `Column ${index + 1}`}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line bg-white">
+            {w.rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {w.columns.map((_, columnIndex) => (
+                  <td key={`${rowIndex}-${columnIndex}`} className="px-3 py-2 align-top text-slate-700">
+                    {row[columnIndex] || "-"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function TableWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: TableWidget;
+  onChange: (widget: TableWidget) => void;
+}) {
+  function update(patch: Partial<TableWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  function updateColumn(index: number, value: string) {
+    update({ columns: widget.columns.map((column, i) => (i === index ? value : column)) });
+  }
+
+  function addColumn() {
+    update({
+      columns: [...widget.columns, `Column ${widget.columns.length + 1}`],
+      rows: widget.rows.map((row) => [...row, ""])
+    });
+  }
+
+  function removeColumn(index: number) {
+    if (widget.columns.length <= 1) return;
+    update({
+      columns: widget.columns.filter((_, i) => i !== index),
+      rows: widget.rows.map((row) => row.filter((_, i) => i !== index))
+    });
+  }
+
+  function updateCell(rowIndex: number, columnIndex: number, value: string) {
+    update({
+      rows: widget.rows.map((row, i) =>
+        i === rowIndex ? widget.columns.map((_, j) => (j === columnIndex ? value : row[j] ?? "")) : row
+      )
+    });
+  }
+
+  function addRow() {
+    update({ rows: [...widget.rows, widget.columns.map(() => "")] });
+  }
+
+  function removeRow(index: number) {
+    update({ rows: widget.rows.filter((_, i) => i !== index) });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
+      <input
+        value={widget.title ?? ""}
+        onChange={(e) => update({ title: e.target.value })}
+        placeholder="Table title (optional)"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold"
+      />
+      <div className="overflow-x-auto">
+        <div className="min-w-[520px] space-y-2">
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${widget.columns.length}, minmax(120px, 1fr)) 40px` }}>
+            {widget.columns.map((column, index) => (
+              <div key={index} className="flex gap-1">
+                <input
+                  value={column}
+                  onChange={(e) => updateColumn(index, e.target.value)}
+                  placeholder={`Column ${index + 1}`}
+                  className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-line bg-white px-2 text-xs font-semibold"
+                />
+                <button type="button" onClick={() => removeColumn(index)} className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={addColumn} className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-slate-500 hover:bg-mist">
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          {widget.rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${widget.columns.length}, minmax(120px, 1fr)) 40px` }}>
+              {widget.columns.map((_, columnIndex) => (
+                <input
+                  key={`${rowIndex}-${columnIndex}`}
+                  value={row[columnIndex] ?? ""}
+                  onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+                  placeholder="Cell"
+                  className="focus-ring h-9 rounded-lg border border-line bg-white px-2 text-sm"
+                />
+              ))}
+              <button type="button" onClick={() => removeRow(rowIndex)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button type="button" onClick={addRow} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-mist">
+        <Plus className="h-4 w-4" /> Add row
+      </button>
+    </div>
+  );
+}
+
+function QuoteWidgetView({ w }: { w: QuoteWidget }) {
+  return (
+    <blockquote className="rounded-lg border-l-4 border-brand bg-teal-50 px-4 py-3">
+      <p className="text-sm leading-6 text-teal-900">{w.content || "Quote text"}</p>
+      {w.source && <footer className="mt-2 text-xs font-semibold text-teal-700">{w.source}</footer>}
+    </blockquote>
+  );
+}
+
+function QuoteWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: QuoteWidget;
+  onChange: (widget: QuoteWidget) => void;
+}) {
+  function update(patch: Partial<QuoteWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
+      <textarea
+        value={widget.content}
+        onChange={(e) => update({ content: e.target.value })}
+        rows={3}
+        placeholder="Quote or important snippet"
+        className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+      />
+      <input
+        value={widget.source ?? ""}
+        onChange={(e) => update({ source: e.target.value })}
+        placeholder="Source (optional)"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+      />
+    </div>
+  );
+}
+
+function LinkWidgetView({ w }: { w: LinkWidget }) {
+  const href = normaliseHref(w.url);
+
+  return (
+    <a
+      href={href || undefined}
+      target="_blank"
+      rel="noreferrer"
+      className="group flex items-start justify-between gap-3 rounded-lg border border-line bg-panel p-4 hover:border-brand hover:bg-teal-50"
+    >
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-bold text-ink group-hover:text-brand">{w.label || w.url || "Resource link"}</span>
+        {w.description && <span className="mt-1 block text-sm leading-5 text-slate-600">{w.description}</span>}
+        {w.url && <span className="mt-2 block truncate text-xs font-semibold text-slate-400">{w.url}</span>}
+      </span>
+      <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-slate-400 group-hover:text-brand" />
+    </a>
+  );
+}
+
+function LinkWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: LinkWidget;
+  onChange: (widget: LinkWidget) => void;
+}) {
+  function update(patch: Partial<LinkWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
+      <input
+        value={widget.label}
+        onChange={(e) => update({ label: e.target.value })}
+        placeholder="Link label"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold"
+      />
+      <input
+        value={widget.url}
+        onChange={(e) => update({ url: e.target.value })}
+        placeholder="https://example.com"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+      />
+      <textarea
+        value={widget.description ?? ""}
+        onChange={(e) => update({ description: e.target.value })}
+        rows={2}
+        placeholder="Short description (optional)"
+        className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+      />
+    </div>
+  );
+}
+
 type Props = {
   post: MockPost;
   userRole: UserRole;
@@ -1045,6 +1299,21 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
                 {widget.type === "checklist" && !editing && <ChecklistWidgetView w={widget} />}
                 {widget.type === "checklist" && editing && (
                   <ChecklistWidgetEditor widget={widget} onChange={updateWidget} />
+                )}
+
+                {widget.type === "table" && !editing && <TableWidgetView w={widget} />}
+                {widget.type === "table" && editing && (
+                  <TableWidgetEditor widget={widget} onChange={updateWidget} />
+                )}
+
+                {widget.type === "quote" && !editing && <QuoteWidgetView w={widget} />}
+                {widget.type === "quote" && editing && (
+                  <QuoteWidgetEditor widget={widget} onChange={updateWidget} />
+                )}
+
+                {widget.type === "link" && !editing && <LinkWidgetView w={widget} />}
+                {widget.type === "link" && editing && (
+                  <LinkWidgetEditor widget={widget} onChange={updateWidget} />
                 )}
 
                 {widget.type === "image" && !editing && (
