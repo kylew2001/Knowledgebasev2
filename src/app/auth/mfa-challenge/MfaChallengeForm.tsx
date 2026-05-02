@@ -14,8 +14,7 @@ export function MfaChallengeForm({ factorId, next }: { factorId: string; next: s
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function verifyCode(nextCode: string) {
     setError(null);
     startTransition(async () => {
       const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
@@ -28,7 +27,7 @@ export function MfaChallengeForm({ factorId, next }: { factorId: string; next: s
       const { error: verifyError } = await supabase.auth.mfa.verify({
         factorId,
         challengeId: challenge.id,
-        code
+        code: nextCode
       });
       if (verifyError) {
         setError("Invalid code. Please try again.");
@@ -37,6 +36,12 @@ export function MfaChallengeForm({ factorId, next }: { factorId: string; next: s
       await completeMfaVerification();
       router.push(next);
     });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (code.length !== 6 || isPending) return;
+    verifyCode(code);
   }
 
   return (
@@ -64,7 +69,11 @@ export function MfaChallengeForm({ factorId, next }: { factorId: string; next: s
             pattern="[0-9]{6}"
             maxLength={6}
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => {
+              const nextCode = e.target.value.replace(/\D/g, "").slice(0, 6);
+              setCode(nextCode);
+              if (nextCode.length === 6 && !isPending) verifyCode(nextCode);
+            }}
             placeholder="000000"
             className="focus-ring h-14 w-full rounded-lg border border-line px-3 text-center text-2xl tracking-widest"
           />

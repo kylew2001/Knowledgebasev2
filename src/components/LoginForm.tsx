@@ -53,6 +53,7 @@ export default function LoginForm() {
   const [totpCode, setTotpCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [resendCountdown, setResendCountdown] = useState(0);
+  const normalizedUsername = username.trim().toLowerCase();
 
   // Countdown timer for email OTP resend
   useEffect(() => {
@@ -87,10 +88,10 @@ export default function LoginForm() {
 
   function handleUsernameSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!username.trim()) return;
+    if (!normalizedUsername) return;
     setError(null);
     startTransition(async () => {
-      const result = await checkUsername(username.trim());
+      const result = await checkUsername(normalizedUsername);
       if (!result.found) {
         setError("Username not found.");
         return;
@@ -103,7 +104,7 @@ export default function LoginForm() {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await signInWithUsername(username.trim(), password);
+      const result = await signInWithUsername(normalizedUsername, password);
       if (!result) return; // redirected
 
       if ("mfaRequired" in result) {
@@ -135,13 +136,12 @@ export default function LoginForm() {
     }
     setError(null);
     startTransition(async () => {
-      const result = await setInitialPassword(username.trim(), password);
+      const result = await setInitialPassword(normalizedUsername, password);
       if (result?.error) setError("Failed to set password. Please try again.");
     });
   }
 
-  function handleTotpSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function verifyTotpCode(code: string) {
     if (!mfaFactorId) return;
     setError(null);
     startTransition(async () => {
@@ -156,7 +156,7 @@ export default function LoginForm() {
       const { error: verifyError } = await supabase.auth.mfa.verify({
         factorId: mfaFactorId,
         challengeId: challengeData.id,
-        code: totpCode
+        code
       });
       if (verifyError) {
         setError("Invalid code. Please try again.");
@@ -167,12 +167,17 @@ export default function LoginForm() {
     });
   }
 
-  function handleEmailOtpSubmit(e: React.FormEvent) {
+  function handleTotpSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (totpCode.length !== 6 || isPending) return;
+    verifyTotpCode(totpCode);
+  }
+
+  function verifyEmailOtpCode(code: string) {
     if (!userId) return;
     setError(null);
     startTransition(async () => {
-      const result = await verifyEmailOtp(userId, otpCode);
+      const result = await verifyEmailOtp(userId, code);
       if (!result) return; // redirected
       if (result.error) {
         setError("Invalid or expired code. Please try again.");
@@ -180,10 +185,16 @@ export default function LoginForm() {
     });
   }
 
+  function handleEmailOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (otpCode.length !== 6 || isPending) return;
+    verifyEmailOtpCode(otpCode);
+  }
+
   function handleResend() {
     setError(null);
     startTransition(async () => {
-      const result = await resendEmailOtp(username.trim());
+      const result = await resendEmailOtp(normalizedUsername);
       if (result?.error) {
         setError("Failed to resend code. Please try again.");
         return;
@@ -218,6 +229,7 @@ export default function LoginForm() {
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
+            type="submit"
             disabled={isPending}
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
           >
@@ -270,6 +282,7 @@ export default function LoginForm() {
             </p>
           )}
           <button
+            type="submit"
             disabled={isPending}
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
           >
@@ -338,6 +351,7 @@ export default function LoginForm() {
           </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
+            type="submit"
             disabled={isPending || !isStrong(password) || password !== confirm}
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
           >
@@ -371,7 +385,11 @@ export default function LoginForm() {
               pattern="[0-9]{6}"
               maxLength={6}
               value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setTotpCode(next);
+                if (next.length === 6 && !isPending) verifyTotpCode(next);
+              }}
               placeholder="000000"
               className="focus-ring mt-1 h-14 w-full rounded-lg border border-line px-3 text-center text-2xl tracking-widest"
             />
@@ -411,7 +429,11 @@ export default function LoginForm() {
               pattern="[0-9]{6}"
               maxLength={6}
               value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) => {
+                const next = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setOtpCode(next);
+                if (next.length === 6 && !isPending) verifyEmailOtpCode(next);
+              }}
               placeholder="000000"
               className="focus-ring mt-1 h-14 w-full rounded-lg border border-line px-3 text-center text-2xl tracking-widest"
             />
