@@ -30,7 +30,51 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen lg:flex">
+      <header className="sticky top-0 z-40 border-b border-line bg-white/95 px-3 py-2 backdrop-blur lg:hidden">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href="/knowledge-base"
+            onClick={(e) => handleNavClick("/knowledge-base", e)}
+            className="focus-ring flex min-w-0 items-center gap-2 rounded-lg px-2 py-2"
+          >
+            <BookOpenText className="h-5 w-5 shrink-0 text-brand" aria-hidden="true" />
+            <span className="truncate text-sm font-bold text-ink">IT Support KB</span>
+          </Link>
+          <div className="flex shrink-0 items-center gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={(e) => handleNavClick(item.href, e)}
+                  title={item.label}
+                  aria-label={item.label}
+                  className={`focus-ring flex h-10 w-10 items-center justify-center rounded-lg ${
+                    isActive
+                      ? "bg-mist text-ink"
+                      : "text-slate-500 hover:bg-panel hover:text-ink"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </Link>
+              );
+            })}
+            <form action="/auth/sign-out" method="post">
+              <button
+                type="submit"
+                title="Sign out"
+                aria-label="Sign out"
+                className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-panel hover:text-ink"
+              >
+                <LogOut className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </form>
+          </div>
+        </div>
+      </header>
       <aside className="hidden w-72 shrink-0 border-r border-line bg-white/88 px-5 py-6 lg:block">
         <div className="mb-9">
           <p className="text-sm font-semibold text-brand">IT Support</p>
