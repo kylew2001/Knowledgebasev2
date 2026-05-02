@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type CSSProperties } from "react";
+import { useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bold,
@@ -136,18 +136,91 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     textDecoration: w.underline ? "underline" : "none"
   };
 
+  function renderInlineBold(text: string): ReactNode[] {
+    return text.split(/(\*\*.*?\*\*)/g).map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      }
+
+      return part;
+    });
+  }
+
+  const blocks: ReactNode[] = [];
+  const lines = w.content.split("\n");
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+
+    if (line === "") {
+      blocks.push(<br key={index} />);
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push(<h2 key={index} className="text-lg font-bold" style={textStyle}>{line.slice(3)}</h2>);
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("**") && line.endsWith("**")) {
+      blocks.push(<p key={index} className="font-semibold" style={textStyle}>{renderInlineBold(line)}</p>);
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("- [ ]")) {
+      const items: ReactNode[] = [];
+      const listStart = index;
+
+      while (index < lines.length && lines[index].startsWith("- [ ]")) {
+        items.push(
+          <li key={index} className="list-none text-slate-600">
+            <span aria-hidden="true">[ ]</span> {renderInlineBold(lines[index].slice(5).trimStart())}
+          </li>
+        );
+        index += 1;
+      }
+
+      blocks.push(<ul key={listStart} className="ml-4 space-y-1">{items}</ul>);
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      const items: ReactNode[] = [];
+      const listStart = index;
+
+      while (index < lines.length && lines[index].startsWith("- ")) {
+        items.push(<li key={index}>{renderInlineBold(lines[index].slice(2))}</li>);
+        index += 1;
+      }
+
+      blocks.push(<ul key={listStart} className="ml-5 list-disc space-y-1" style={textStyle}>{items}</ul>);
+      continue;
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const items: ReactNode[] = [];
+      const listStart = index;
+
+      while (index < lines.length && /^\d+\.\s/.test(lines[index])) {
+        items.push(<li key={index}>{renderInlineBold(lines[index].replace(/^\d+\.\s*/, ""))}</li>);
+        index += 1;
+      }
+
+      blocks.push(<ol key={listStart} className="ml-5 list-decimal space-y-1" style={textStyle}>{items}</ol>);
+      continue;
+    }
+
+    blocks.push(<p key={index} style={textStyle}>{renderInlineBold(line)}</p>);
+    index += 1;
+  }
+
   return (
     <div className="prose prose-sm max-w-none" style={textStyle}>
-      {w.content.split("\n").map((line, i) => {
-        const bold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-        if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-bold" style={textStyle}>{line.slice(3)}</h2>;
-        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold" style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
-        if (line.startsWith("- [ ]")) return <li key={i} className="ml-4 list-none text-slate-600">☐ {line.slice(5)}</li>;
-        if (line.startsWith("- ")) return <li key={i} className="ml-5 list-disc" style={textStyle}>{line.slice(2)}</li>;
-        if (line.match(/^\d+\./)) return <li key={i} className="ml-5 list-decimal" style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
-        if (line === "") return <br key={i} />;
-        return <p key={i} style={textStyle} dangerouslySetInnerHTML={{ __html: bold }} />;
-      })}
+      {blocks}
     </div>
   );
 }
