@@ -60,6 +60,8 @@ function getPostSearchText(post: MockPost) {
     .map((widget) => {
       if (widget.type === "text" || widget.type === "callout") return widget.content;
       if (widget.type === "code") return `${widget.language} ${widget.filename ?? ""} ${widget.content}`;
+      if (widget.type === "steps") return `${widget.title ?? ""} ${widget.steps.map((step) => step.text).join(" ")}`;
+      if (widget.type === "checklist") return `${widget.title ?? ""} ${widget.items.map((item) => item.text).join(" ")}`;
       if (widget.type === "image") return `${widget.caption} ${widget.src}`;
       if (widget.type === "pdf") return widget.filename;
       return "";

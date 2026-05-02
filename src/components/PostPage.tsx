@@ -15,6 +15,7 @@ import {
   Info,
   Italic,
   List,
+  ListChecks,
   ListOrdered,
   Minus,
   Palette,
@@ -50,9 +51,11 @@ type ImageWidget   = { id: string; type: "image";   src: string; caption: string
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
 type CalloutWidget = { id: string; type: "callout"; variant: "info" | "warning" | "success"; content: string };
 type CodeWidget    = { id: string; type: "code"; language: string; filename?: string; content: string };
+type ChecklistWidget = { id: string; type: "checklist"; title?: string; items: { id: string; text: string; checked: boolean }[] };
+type StepsWidget = { id: string; type: "steps"; title?: string; steps: { id: string; text: string }[] };
 type DividerWidget = { id: string; type: "divider" };
 
-type Widget = TextWidget | ImageWidget | PdfWidget | CalloutWidget | CodeWidget | DividerWidget;
+type Widget = TextWidget | ImageWidget | PdfWidget | CalloutWidget | CodeWidget | ChecklistWidget | StepsWidget | DividerWidget;
 
 // ── Sample default content for seeded posts ─────────────────────────────────
 
@@ -88,6 +91,8 @@ const widgetTypes = [
   { type: "pdf"     as const, label: "PDF",     icon: FileText     },
   { type: "callout" as const, label: "Callout", icon: Info         },
   { type: "code"    as const, label: "Code",    icon: Code2        },
+  { type: "steps"   as const, label: "Steps",   icon: ListOrdered  },
+  { type: "checklist" as const, label: "Checklist", icon: ListChecks },
   { type: "divider" as const, label: "Divider", icon: Minus        },
 ];
 
@@ -98,6 +103,8 @@ function blankWidget(type: Widget["type"]): Widget {
     case "pdf":     return { id: newId(), type: "pdf", filename: "" };
     case "callout": return { id: newId(), type: "callout", variant: "info", content: "" };
     case "code":    return { id: newId(), type: "code", language: "PowerShell", filename: "", content: "" };
+    case "steps":   return { id: newId(), type: "steps", title: "", steps: [{ id: newId(), text: "" }] };
+    case "checklist": return { id: newId(), type: "checklist", title: "", items: [{ id: newId(), text: "", checked: false }] };
     case "divider": return { id: newId(), type: "divider" };
   }
 }
@@ -113,7 +120,7 @@ function AddWidgetBar({ onAdd }: { onAdd: (w: Widget) => void }) {
         <Plus className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute top-9 z-20 flex gap-1 rounded-lg border border-line bg-white p-1 shadow-soft">
+        <div className="absolute top-9 z-20 grid grid-cols-3 gap-1 rounded-lg border border-line bg-white p-1 shadow-soft sm:flex">
           {widgetTypes.map(({ type, label, icon: Icon }) => (
             <button
               key={type}
@@ -503,6 +510,157 @@ function CodeWidgetEditor({
   );
 }
 
+function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
+  return (
+    <div className="rounded-lg border border-line bg-panel p-4">
+      {w.title && <h3 className="mb-3 text-sm font-bold text-ink">{w.title}</h3>}
+      <ul className="space-y-2">
+        {w.items.map((item) => (
+          <li key={item.id} className="flex items-start gap-2 text-sm text-slate-700">
+            <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${item.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
+              <Check className="h-3.5 w-3.5" />
+            </span>
+            <span className={item.checked ? "text-slate-500 line-through" : ""}>{item.text || "Checklist item"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StepsWidgetView({ w }: { w: StepsWidget }) {
+  return (
+    <div className="rounded-lg border border-line bg-white p-4">
+      {w.title && <h3 className="mb-3 text-sm font-bold text-ink">{w.title}</h3>}
+      <ol className="space-y-3">
+        {w.steps.map((step, index) => (
+          <li key={step.id} className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+              {index + 1}
+            </span>
+            <p className="pt-1 text-sm leading-6 text-slate-700">{step.text || "Step instructions"}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function ChecklistWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: ChecklistWidget;
+  onChange: (widget: ChecklistWidget) => void;
+}) {
+  function update(patch: Partial<ChecklistWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  function updateItem(itemId: string, patch: Partial<ChecklistWidget["items"][number]>) {
+    update({ items: widget.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)) });
+  }
+
+  function removeItem(itemId: string) {
+    update({ items: widget.items.filter((item) => item.id !== itemId) });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
+      <input
+        value={widget.title ?? ""}
+        onChange={(e) => update({ title: e.target.value })}
+        placeholder="Checklist title (optional)"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold"
+      />
+      <div className="space-y-2">
+        {widget.items.map((item) => (
+          <div key={item.id} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={item.checked}
+              onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
+              className="h-4 w-4 rounded border-line"
+            />
+            <input
+              value={item.text}
+              onChange={(e) => updateItem(item.id, { text: e.target.value })}
+              placeholder="Checklist item"
+              className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+            />
+            <button type="button" onClick={() => removeItem(item.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => update({ items: [...widget.items, { id: newId(), text: "", checked: false }] })}
+        className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-mist"
+      >
+        <Plus className="h-4 w-4" /> Add item
+      </button>
+    </div>
+  );
+}
+
+function StepsWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: StepsWidget;
+  onChange: (widget: StepsWidget) => void;
+}) {
+  function update(patch: Partial<StepsWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  function updateStep(stepId: string, text: string) {
+    update({ steps: widget.steps.map((step) => (step.id === stepId ? { ...step, text } : step)) });
+  }
+
+  function removeStep(stepId: string) {
+    update({ steps: widget.steps.filter((step) => step.id !== stepId) });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
+      <input
+        value={widget.title ?? ""}
+        onChange={(e) => update({ title: e.target.value })}
+        placeholder="Steps title (optional)"
+        className="focus-ring h-10 w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold"
+      />
+      <div className="space-y-2">
+        {widget.steps.map((step, index) => (
+          <div key={step.id} className="flex items-center gap-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+              {index + 1}
+            </span>
+            <input
+              value={step.text}
+              onChange={(e) => updateStep(step.id, e.target.value)}
+              placeholder="Step instructions"
+              className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+            />
+            <button type="button" onClick={() => removeStep(step.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => update({ steps: [...widget.steps, { id: newId(), text: "" }] })}
+        className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-mist"
+      >
+        <Plus className="h-4 w-4" /> Add step
+      </button>
+    </div>
+  );
+}
+
 type Props = {
   post: MockPost;
   userRole: UserRole;
@@ -700,6 +858,16 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
                 {widget.type === "code" && !editing && <CodeWidgetView w={widget} />}
                 {widget.type === "code" && editing && (
                   <CodeWidgetEditor widget={widget} onChange={updateWidget} />
+                )}
+
+                {widget.type === "steps" && !editing && <StepsWidgetView w={widget} />}
+                {widget.type === "steps" && editing && (
+                  <StepsWidgetEditor widget={widget} onChange={updateWidget} />
+                )}
+
+                {widget.type === "checklist" && !editing && <ChecklistWidgetView w={widget} />}
+                {widget.type === "checklist" && editing && (
+                  <ChecklistWidgetEditor widget={widget} onChange={updateWidget} />
                 )}
 
                 {widget.type === "image" && !editing && (

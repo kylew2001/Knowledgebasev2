@@ -26,6 +26,18 @@ export type CodeWidget = {
   filename?: string;
   content: string;
 };
+export type ChecklistWidget = {
+  id: string;
+  type: "checklist";
+  title?: string;
+  items: { id: string; text: string; checked: boolean }[];
+};
+export type StepsWidget = {
+  id: string;
+  type: "steps";
+  title?: string;
+  steps: { id: string; text: string }[];
+};
 export type DividerWidget = { id: string; type: "divider" };
 
 export type Widget =
@@ -34,6 +46,8 @@ export type Widget =
   | PdfWidget
   | CalloutWidget
   | CodeWidget
+  | ChecklistWidget
+  | StepsWidget
   | DividerWidget;
 
 export const defaultContent: Record<string, Widget[]> = {
@@ -72,6 +86,8 @@ export function derivePostType(
       widget.type === "text" ||
       widget.type === "callout" ||
       widget.type === "code" ||
+      widget.type === "checklist" ||
+      widget.type === "steps" ||
       widget.type === "image" ||
       widget.type === "divider"
   );
