@@ -18,6 +18,8 @@ export type CalloutWidget = {
   type: "callout";
   variant: "info" | "warning" | "success";
   content: string;
+  color?: string;
+  icon?: string;
 };
 export type CodeWidget = {
   id: string;

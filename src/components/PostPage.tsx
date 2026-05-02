@@ -51,7 +51,14 @@ type TextWidget = {
 };
 type ImageWidget   = { id: string; type: "image";   src: string; caption: string };
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
-type CalloutWidget = { id: string; type: "callout"; variant: "info" | "warning" | "success"; content: string };
+type CalloutWidget = {
+  id: string;
+  type: "callout";
+  variant: "info" | "warning" | "success";
+  content: string;
+  color?: string;
+  icon?: string;
+};
 type CodeWidget    = { id: string; type: "code"; language: string; filename?: string; content: string };
 type ChecklistWidget = { id: string; type: "checklist"; title?: string; items: { id: string; text: string; checked: boolean }[] };
 type StepsWidget = { id: string; type: "steps"; title?: string; steps: { id: string; text: string }[] };
@@ -120,7 +127,7 @@ function blankWidget(type: Widget["type"]): Widget {
     case "text":    return { id: newId(), type: "text", content: "", fontSize: "16px", fontFamily: "Inter, system-ui, sans-serif", color: "#334155" };
     case "image":   return { id: newId(), type: "image", src: "", caption: "" };
     case "pdf":     return { id: newId(), type: "pdf", filename: "" };
-    case "callout": return { id: newId(), type: "callout", variant: "info", content: "" };
+    case "callout": return { id: newId(), type: "callout", variant: "info", content: "", color: "#2563eb", icon: "info" };
     case "code":    return { id: newId(), type: "code", language: "PowerShell", filename: "", content: "" };
     case "steps":   return { id: newId(), type: "steps", title: "", steps: [{ id: newId(), text: "" }] };
     case "checklist": return { id: newId(), type: "checklist", title: "", items: [{ id: newId(), text: "", checked: false }] };
@@ -606,17 +613,152 @@ function TextWidgetEditor({
   );
 }
 
-function CalloutView({ w }: { w: CalloutWidget }) {
-  const styles = {
-    info:    { bg: "bg-blue-50 border-blue-200",   icon: <Info className="h-5 w-5 text-blue-500" />,           text: "text-blue-800" },
-    warning: { bg: "bg-amber-50 border-amber-200", icon: <AlertTriangle className="h-5 w-5 text-amber-500" />, text: "text-amber-800" },
-    success: { bg: "bg-teal-50 border-teal-200",   icon: <BookOpen className="h-5 w-5 text-teal-600" />,       text: "text-teal-800" },
+const calloutPresets = {
+  info: { label: "Info", color: "#2563eb", icon: "info" },
+  warning: { label: "Warning", color: "#d97706", icon: "warning" },
+  success: { label: "Success", color: "#0f766e", icon: "success" }
+} as const;
+
+const calloutIconOptions = [
+  { value: "info", label: "Info", Icon: Info },
+  { value: "warning", label: "Warning", Icon: AlertTriangle },
+  { value: "success", label: "Check", Icon: Check },
+  { value: "book", label: "Book", Icon: BookOpen },
+  { value: "code", label: "Code", Icon: Code2 },
+  { value: "file", label: "File", Icon: FileText },
+  { value: "link", label: "Link", Icon: ExternalLink }
+] as const;
+
+const calloutColorOptions = [
+  "#2563eb",
+  "#d97706",
+  "#0f766e",
+  "#7c3aed",
+  "#be123c",
+  "#475569",
+  "#15803d",
+  "#c2410c"
+];
+
+function hexToRgb(hex: string) {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return { r: 37, g: 99, b: 235 };
+
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16)
   };
-  const s = styles[w.variant];
+}
+
+function getCalloutDesign(w: CalloutWidget) {
+  const preset = calloutPresets[w.variant];
+  const color = w.color || preset.color;
+  const rgb = hexToRgb(color);
+  const iconOption = calloutIconOptions.find((option) => option.value === (w.icon || preset.icon)) ?? calloutIconOptions[0];
+
+  return {
+    color,
+    Icon: iconOption.Icon,
+    style: {
+      backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.09)`,
+      borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.32)`,
+      color
+    } satisfies CSSProperties
+  };
+}
+
+function CalloutView({ w }: { w: CalloutWidget }) {
+  const { Icon, style } = getCalloutDesign(w);
+
   return (
-    <div className={`flex gap-3 rounded-lg border p-4 ${s.bg}`}>
-      <span className="mt-0.5 shrink-0">{s.icon}</span>
-      <p className={`text-sm leading-6 ${s.text}`}>{w.content}</p>
+    <div className="flex gap-3 rounded-lg border p-4" style={style}>
+      <span className="mt-0.5 shrink-0">
+        <Icon className="h-5 w-5" />
+      </span>
+      <p className="text-sm leading-6">{w.content}</p>
+    </div>
+  );
+}
+
+function CalloutWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: CalloutWidget;
+  onChange: (widget: CalloutWidget) => void;
+}) {
+  function update(patch: Partial<CalloutWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(calloutPresets).map(([variant, preset]) => (
+          <button
+            key={variant}
+            type="button"
+            onClick={() => update({ variant: variant as CalloutWidget["variant"], color: preset.color, icon: preset.icon })}
+            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${widget.variant === variant ? "border-brand bg-teal-50 text-brand" : "border-line bg-white text-slate-500 hover:bg-mist"}`}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Icon</span>
+          <div className="mt-2 grid grid-cols-7 gap-1">
+            {calloutIconOptions.map(({ value, label, Icon }) => (
+              <button
+                key={value}
+                type="button"
+                title={label}
+                onClick={() => update({ icon: value })}
+                className={`focus-ring flex h-9 items-center justify-center rounded-lg border ${widget.icon === value ? "border-brand bg-teal-50 text-brand" : "border-line bg-white text-slate-500 hover:bg-mist"}`}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Colour</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {calloutColorOptions.map((color) => (
+              <button
+                key={color}
+                type="button"
+                title={color}
+                onClick={() => update({ color })}
+                className={`h-8 w-8 rounded-full border-2 transition ${widget.color === color ? "scale-110 border-ink" : "border-transparent hover:scale-105"}`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+            <label className="focus-ring flex h-8 w-8 items-center justify-center rounded-full border border-line bg-white">
+              <input
+                type="color"
+                value={widget.color || calloutPresets[widget.variant].color}
+                onChange={(e) => update({ color: e.target.value })}
+                className="h-6 w-6 cursor-pointer border-0 bg-transparent p-0"
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <textarea
+        value={widget.content}
+        onChange={(e) => update({ content: e.target.value })}
+        rows={2}
+        placeholder="Callout message..."
+        className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+      />
+
+      <CalloutView w={widget} />
     </div>
   );
 }
@@ -1263,27 +1405,7 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
 
                 {widget.type === "callout" && !editing && <CalloutView w={widget} />}
                 {widget.type === "callout" && editing && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      {(["info", "warning", "success"] as const).map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => updateWidget({ ...widget, variant: v })}
-                          className={`rounded-lg border px-3 py-1 text-xs font-semibold ${widget.variant === v ? "border-brand bg-teal-50 text-brand" : "border-line text-slate-500 hover:bg-panel"}`}
-                        >
-                          {v}
-                        </button>
-                      ))}
-                    </div>
-                    <textarea
-                      value={widget.content}
-                      onChange={(e) => updateWidget({ ...widget, content: e.target.value })}
-                      rows={2}
-                      placeholder="Callout message…"
-                      className="focus-ring w-full rounded-lg border border-line px-3 py-2 text-sm"
-                    />
-                  </div>
+                  <CalloutWidgetEditor widget={widget} onChange={updateWidget} />
                 )}
 
                 {widget.type === "code" && !editing && <CodeWidgetView w={widget} />}
