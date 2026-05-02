@@ -170,6 +170,183 @@ const codeLanguages = [
   "Markdown"
 ];
 
+type HighlightRule = { pattern: RegExp; className: string };
+
+const tokenStyles = {
+  comment: "text-slate-500",
+  string: "text-emerald-300",
+  number: "text-amber-300",
+  keyword: "text-sky-300",
+  variable: "text-violet-300",
+  property: "text-cyan-300",
+  function: "text-yellow-200",
+  operator: "text-rose-300",
+  tag: "text-pink-300",
+  attr: "text-lime-300"
+};
+
+function wordsPattern(words: string[]) {
+  return new RegExp(`\\b(?:${words.join("|")})\\b`);
+}
+
+function getHighlightRules(language: string): HighlightRule[] {
+  const lang = language.toLowerCase();
+  const commonStrings = [
+    { pattern: /"(?:\\.|[^"\\])*"/, className: tokenStyles.string },
+    { pattern: /'(?:\\.|[^'\\])*'/, className: tokenStyles.string }
+  ];
+  const commonNumbers = [{ pattern: /\b\d+(?:\.\d+)?\b/, className: tokenStyles.number }];
+
+  if (lang.includes("powershell")) {
+    return [
+      { pattern: /#.*/, className: tokenStyles.comment },
+      { pattern: /\$[A-Za-z_][\w:]*/, className: tokenStyles.variable },
+      { pattern: /\b(?:Get|Set|New|Remove|Add|Clear|Start|Stop|Restart|Test|Invoke|Import|Export|Connect|Disconnect)-[A-Za-z]+\b/, className: tokenStyles.function },
+      { pattern: wordsPattern(["if", "else", "elseif", "foreach", "for", "while", "switch", "param", "function", "return", "try", "catch", "finally", "true", "false", "null"]), className: tokenStyles.keyword },
+      ...commonStrings,
+      ...commonNumbers,
+      { pattern: /-[A-Za-z][\w-]*/, className: tokenStyles.operator }
+    ];
+  }
+
+  if (lang.includes("bash")) {
+    return [
+      { pattern: /#.*/, className: tokenStyles.comment },
+      { pattern: /\$[A-Za-z_][\w]*/, className: tokenStyles.variable },
+      { pattern: wordsPattern(["if", "then", "else", "elif", "fi", "for", "while", "do", "done", "case", "esac", "function", "echo", "sudo", "export", "return", "exit"]), className: tokenStyles.keyword },
+      ...commonStrings,
+      ...commonNumbers,
+      { pattern: /--?[A-Za-z][\w-]*/, className: tokenStyles.operator }
+    ];
+  }
+
+  if (lang.includes("command")) {
+    return [
+      { pattern: /rem .*/i, className: tokenStyles.comment },
+      { pattern: /%[A-Za-z_][\w]*%/, className: tokenStyles.variable },
+      { pattern: wordsPattern(["echo", "set", "if", "else", "for", "in", "do", "call", "exit", "copy", "xcopy", "robocopy", "mkdir", "rmdir", "del", "net", "ipconfig", "ping"]), className: tokenStyles.keyword },
+      ...commonStrings,
+      ...commonNumbers
+    ];
+  }
+
+  if (lang === "sql") {
+    return [
+      { pattern: /--.*/, className: tokenStyles.comment },
+      { pattern: /\/\*[\s\S]*?\*\//, className: tokenStyles.comment },
+      ...commonStrings,
+      { pattern: wordsPattern(["select", "from", "where", "join", "inner", "left", "right", "full", "outer", "on", "insert", "into", "update", "delete", "create", "alter", "drop", "table", "view", "index", "and", "or", "not", "null", "is", "like", "in", "exists", "group", "by", "order", "having", "limit", "offset", "values", "set", "as", "distinct", "case", "when", "then", "else", "end"]), className: tokenStyles.keyword },
+      ...commonNumbers
+    ];
+  }
+
+  if (lang === "json") {
+    return [
+      { pattern: /"(?:\\.|[^"\\])*"(?=\s*:)/, className: tokenStyles.property },
+      { pattern: /"(?:\\.|[^"\\])*"/, className: tokenStyles.string },
+      { pattern: /\b(?:true|false|null)\b/, className: tokenStyles.keyword },
+      ...commonNumbers
+    ];
+  }
+
+  if (["javascript", "typescript", "c#"].includes(lang)) {
+    return [
+      { pattern: /\/\/.*/, className: tokenStyles.comment },
+      { pattern: /\/\*[\s\S]*?\*\//, className: tokenStyles.comment },
+      ...commonStrings,
+      { pattern: /`(?:\\.|[^`\\])*`/, className: tokenStyles.string },
+      { pattern: wordsPattern(["const", "let", "var", "function", "return", "if", "else", "for", "while", "switch", "case", "break", "continue", "class", "extends", "import", "from", "export", "async", "await", "try", "catch", "finally", "new", "public", "private", "protected", "static", "void", "string", "number", "boolean", "true", "false", "null", "undefined"]), className: tokenStyles.keyword },
+      { pattern: /\b[A-Za-z_]\w*(?=\s*\()/, className: tokenStyles.function },
+      ...commonNumbers
+    ];
+  }
+
+  if (["python", "php"].includes(lang)) {
+    return [
+      { pattern: /#.*/, className: tokenStyles.comment },
+      { pattern: /\/\/.*/, className: tokenStyles.comment },
+      ...commonStrings,
+      { pattern: /\$[A-Za-z_]\w*/, className: tokenStyles.variable },
+      { pattern: wordsPattern(["def", "class", "return", "if", "elif", "else", "for", "while", "try", "except", "finally", "import", "from", "as", "with", "lambda", "function", "echo", "public", "private", "protected", "true", "false", "null", "None", "True", "False"]), className: tokenStyles.keyword },
+      { pattern: /\b[A-Za-z_]\w*(?=\s*\()/, className: tokenStyles.function },
+      ...commonNumbers
+    ];
+  }
+
+  if (["html", "xml"].includes(lang)) {
+    return [
+      { pattern: /<!--[\s\S]*?-->/, className: tokenStyles.comment },
+      { pattern: /<\/?[A-Za-z][^>\s/]*/, className: tokenStyles.tag },
+      { pattern: /\s[A-Za-z_:][-A-Za-z0-9_:.]*(?=\=)/, className: tokenStyles.attr },
+      ...commonStrings
+    ];
+  }
+
+  if (lang === "css") {
+    return [
+      { pattern: /\/\*[\s\S]*?\*\//, className: tokenStyles.comment },
+      { pattern: /[.#]?[A-Za-z_-][\w-]*(?=\s*\{)/, className: tokenStyles.tag },
+      { pattern: /[A-Za-z-]+(?=\s*:)/, className: tokenStyles.property },
+      ...commonStrings,
+      { pattern: /#[0-9a-fA-F]{3,8}\b/, className: tokenStyles.number },
+      { pattern: /\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms)?\b/, className: tokenStyles.number }
+    ];
+  }
+
+  if (lang === "yaml") {
+    return [
+      { pattern: /#.*/, className: tokenStyles.comment },
+      { pattern: /^[\t ]*[A-Za-z0-9_-]+(?=\s*:)/, className: tokenStyles.property },
+      ...commonStrings,
+      ...commonNumbers,
+      { pattern: /\b(?:true|false|null|yes|no)\b/, className: tokenStyles.keyword }
+    ];
+  }
+
+  if (lang === "markdown") {
+    return [
+      { pattern: /^#{1,6}\s.*/, className: tokenStyles.keyword },
+      { pattern: /`[^`]+`/, className: tokenStyles.string },
+      { pattern: /\*\*[^*]+\*\*/, className: tokenStyles.function },
+      { pattern: /\[[^\]]+\]\([^)]+\)/, className: tokenStyles.property }
+    ];
+  }
+
+  return [...commonStrings, ...commonNumbers];
+}
+
+function highlightCode(code: string, language: string): ReactNode[] {
+  const rules = getHighlightRules(language);
+  const nodes: ReactNode[] = [];
+  let buffer = "";
+  let cursor = 0;
+
+  while (cursor < code.length) {
+    const rest = code.slice(cursor);
+    const matched = rules
+      .map((rule) => ({ rule, match: rest.match(new RegExp(`^(?:${rule.pattern.source})`, rule.pattern.flags.replace("g", ""))) }))
+      .find(({ match }) => match?.[0]);
+
+    if (!matched?.match) {
+      buffer += code[cursor];
+      cursor += 1;
+      continue;
+    }
+
+    if (buffer) {
+      nodes.push(buffer);
+      buffer = "";
+    }
+
+    const value = matched.match[0];
+    nodes.push(<span key={`${cursor}-${nodes.length}`} className={matched.rule.className}>{value}</span>);
+    cursor += value.length;
+  }
+
+  if (buffer) nodes.push(buffer);
+  return nodes;
+}
+
 function TextWidgetView({ w }: { w: TextWidget }) {
   const textStyle: CSSProperties = {
     color: w.color ?? "#334155",
@@ -456,7 +633,7 @@ function CodeWidgetView({ w }: { w: CodeWidget }) {
         </button>
       </div>
       <pre className="max-w-full overflow-x-auto p-4 text-sm leading-6 text-slate-100">
-        <code className="font-mono">{code || "// Add code here"}</code>
+        <code className="font-mono">{highlightCode(code || "// Add code here", language)}</code>
       </pre>
     </div>
   );
