@@ -10,6 +10,7 @@ import { PostPage } from "@/components/PostPage";
 import { derivePostType, getPostWidgets } from "@/lib/post-content";
 import { canSeeVisibility, everyoneVisibility, getVisibilityLabel, type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
 import VisibilityEditor from "@/components/VisibilityEditor";
+import { savePostToDatabase, savePostsToDatabase } from "@/app/(app)/knowledge-base/actions";
 
 type Category = (typeof categoryCards)[number] & {
   subcategories: string[];
@@ -19,6 +20,7 @@ type Category = (typeof categoryCards)[number] & {
 
 const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
 const POST_STORAGE_KEY = "knowledgebase-v2-posts";
+const POST_DB_MIGRATION_KEY = "knowledgebase-v2-posts-db-migrated";
 
 const typeConfig = {
   pdf:     { label: "PDF",     icon: FileText, bg: "bg-orange-50", fg: "text-orange-600" },
@@ -73,6 +75,13 @@ function saveStoredPosts(posts: MockPost[]) {
   } catch {
     // Saving should never block editing if browser storage is unavailable.
   }
+}
+
+function mergePostsWithSeedData(databasePosts: MockPost[]) {
+  if (!databasePosts.length) return mockPosts;
+
+  const databaseIds = new Set(databasePosts.map((post) => post.id));
+  return [...databasePosts, ...mockPosts.filter((post) => !databaseIds.has(post.id))];
 }
 
 function getCategoryResourceCount(posts: MockPost[], categoryTitle: string) {
@@ -286,11 +295,13 @@ function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initial
 export function KnowledgeBase({
   userRole = "viewer",
   userGroupIds = [],
-  groups = []
+  groups = [],
+  initialPosts = []
 }: {
   userRole?: string;
   userGroupIds?: string[];
   groups?: VisibilityGroup[];
+  initialPosts?: MockPost[];
 }) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const adminGroupId = groups.find((group) => group.name.toLowerCase() === "admin")?.id;
@@ -301,7 +312,7 @@ export function KnowledgeBase({
       : false);
 
   const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [posts, setPosts] = useState<MockPost[]>(mockPosts);
+  const [posts, setPosts] = useState<MockPost[]>(() => mergePostsWithSeedData(initialPosts));
   const [postsHydrated, setPostsHydrated] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
@@ -321,9 +332,17 @@ export function KnowledgeBase({
 
   useEffect(() => {
     const storedPosts = loadStoredPosts();
-    if (storedPosts) setPosts(storedPosts);
+    const alreadyMigrated = window.localStorage.getItem(POST_DB_MIGRATION_KEY) === "true";
+
+    if (storedPosts && canEdit && !alreadyMigrated) {
+      setPosts(storedPosts);
+      void savePostsToDatabase(storedPosts).then((result) => {
+        if (result.ok) window.localStorage.setItem(POST_DB_MIGRATION_KEY, "true");
+      });
+    }
+
     setPostsHydrated(true);
-  }, []);
+  }, [canEdit]);
 
   useEffect(() => {
     if (!postsHydrated) return;
@@ -366,11 +385,13 @@ export function KnowledgeBase({
       c.title === oldTitle ? { ...c, ...updated } : c
     );
     if (updated.title && updated.title !== oldTitle) {
-      setPosts((prev) =>
-        prev.map((post) =>
+      setPosts((prev) => {
+        const nextPosts = prev.map((post) =>
           post.category === oldTitle ? { ...post, category: updated.title! } : post
-        )
-      );
+        );
+        void savePostsToDatabase(nextPosts.filter((post) => post.category === updated.title));
+        return nextPosts;
+      });
     }
     setCategories(next);
     if (selectedCategory?.title === oldTitle) {
@@ -400,17 +421,25 @@ export function KnowledgeBase({
 
   function handleAddPost(post: MockPost) {
     setPosts((prev) => [post, ...prev]);
+    void savePostToDatabase(post);
   }
 
   function handleSavePost(postId: string, widgets: import("@/lib/post-content").Widget[], visibility: VisibilityRule) {
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId ? { ...post, widgets, visibility, type: getStoredPostType(widgets) } : post
-      )
-    );
+    const nextType = getStoredPostType(widgets);
+    setPosts((prev) => {
+      let savedPost: MockPost | null = null;
+      const nextPosts = prev.map((post) => {
+        if (post.id !== postId) return post;
+        savedPost = { ...post, widgets, visibility, type: nextType };
+        return savedPost;
+      });
+
+      if (savedPost) void savePostToDatabase(savedPost);
+      return nextPosts;
+    });
     setSelectedPost((current) =>
       current?.id === postId
-        ? { ...current, widgets, visibility, type: getStoredPostType(widgets) }
+        ? { ...current, widgets, visibility, type: nextType }
         : current
     );
   }
@@ -447,7 +476,7 @@ export function KnowledgeBase({
   const headerTitle =
     level === 2 ? selectedSubcategory!
     : level === 1 ? selectedCategory!.title
-    : "IT support articles, PDFs, and runbooks";
+    : "IT support articles and runbooks";
 
   if (selectedPost && selectedCategory) {
     return (

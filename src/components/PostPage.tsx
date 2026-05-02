@@ -33,6 +33,7 @@ import {
 import { type MockPost } from "@/lib/mock-data";
 import { type UserRole } from "@/lib/auth";
 import { derivePostType } from "@/lib/post-content";
+import { createClient } from "@/lib/supabase/client";
 import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
 import VisibilityEditor from "@/components/VisibilityEditor";
 
@@ -49,7 +50,7 @@ type TextWidget = {
   italic?: boolean;
   underline?: boolean;
 };
-type ImageWidget   = { id: string; type: "image";   src: string; caption: string };
+type ImageWidget   = { id: string; type: "image";   src: string; caption: string; storagePath?: string };
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
 type CalloutWidget = {
   id: string;
@@ -106,12 +107,14 @@ const defaultContent: Record<string, Widget[]> = {
 
 function newId() { return Math.random().toString(36).slice(2); }
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 // ── Widget picker ────────────────────────────────────────────────────────────
 
 const widgetTypes = [
   { type: "text"    as const, label: "Text",    icon: PenLine      },
   { type: "image"   as const, label: "Image",   icon: ImageIcon    },
-  { type: "pdf"     as const, label: "PDF",     icon: FileText     },
+  { type: "pdf"     as const, label: "PDF",     icon: FileText, disabled: true, title: "PDF attachments will be re-added in future when more database storage is added." },
   { type: "callout" as const, label: "Callout", icon: Info         },
   { type: "code"    as const, label: "Code",    icon: Code2        },
   { type: "steps"   as const, label: "Steps",   icon: ListOrdered  },
@@ -150,13 +153,16 @@ function AddWidgetBar({ onAdd }: { onAdd: (w: Widget) => void }) {
       </button>
       {open && (
         <div className="absolute top-9 z-20 grid grid-cols-3 gap-1 rounded-lg border border-line bg-white p-1 shadow-soft sm:flex">
-          {widgetTypes.map(({ type, label, icon: Icon }) => (
+          {widgetTypes.map(({ type, label, icon: Icon, disabled, title }) => (
             <button
               key={type}
-              onClick={() => { onAdd(blankWidget(type)); setOpen(false); }}
-              className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-mist"
+              type="button"
+              disabled={disabled}
+              title={title}
+              onClick={() => { if (!disabled) { onAdd(blankWidget(type)); setOpen(false); } }}
+              className={`flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold ${disabled ? "cursor-not-allowed text-slate-300" : "text-slate-600 hover:bg-mist"}`}
             >
-              <Icon className="h-4 w-4 text-slate-500" />
+              <Icon className={`h-4 w-4 ${disabled ? "text-slate-300" : "text-slate-500"}`} />
               {label}
             </button>
           ))}
@@ -1297,16 +1303,43 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
     setDraft((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
   }
 
-  function handleImageSelected(widget: ImageWidget, event: ChangeEvent<HTMLInputElement>) {
+  async function handleImageSelected(widget: ImageWidget, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      event.target.value = "";
+      window.alert("Images must be 5 MB or smaller for now.");
+      return;
+    }
+
+    const supabase = createClient();
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "image";
+    const storagePath = `${post.id}/${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage
+      .from("knowledgebase-images")
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type
+      });
+
+    if (error) {
+      window.alert(`Image upload failed: ${error.message}`);
+      return;
+    }
+
+    const { data } = await supabase.storage
+      .from("knowledgebase-images")
+      .createSignedUrl(storagePath, 60 * 60 * 24);
 
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== "string") return;
       updateWidget({
         ...widget,
-        src: reader.result,
+        src: data?.signedUrl ?? reader.result,
+        storagePath,
         caption: widget.caption || file.name.replace(/\.[^/.]+$/, "")
       });
     };
@@ -1470,8 +1503,12 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
                   </div>
                 )}
                 {widget.type === "pdf" && editing && (
-                  <div className="space-y-2">
-                    <input type="file" accept="application/pdf" className="focus-ring w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" />
+                  <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
+                    <div className="flex items-center gap-3 text-slate-400">
+                      <FileText className="h-6 w-6" />
+                      <p className="text-sm font-semibold">PDF attachments will be re-added in future when more database storage is added.</p>
+                    </div>
+                    <input type="file" accept="application/pdf" disabled title="PDF attachments will be re-added in future when more database storage is added." className="w-full cursor-not-allowed rounded-lg border border-line bg-slate-100 px-3 py-2 text-sm text-slate-400" />
                     <input value={widget.filename} onChange={(e) => updateWidget({ ...widget, filename: e.target.value })} placeholder="Display name (optional)" className="focus-ring h-9 w-full rounded-lg border border-line px-3 text-sm" />
                   </div>
                 )}

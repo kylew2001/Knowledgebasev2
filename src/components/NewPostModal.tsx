@@ -26,7 +26,6 @@ export default function NewPostModal({
 }: Props) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [pdfName, setPdfName] = useState("");
   const [visibility, setVisibility] = useState<VisibilityRule>({ mode: "everyone", groupIds: [] });
 
   function handleSubmit(e: React.FormEvent) {
@@ -40,14 +39,6 @@ export default function NewPostModal({
         id: crypto.randomUUID(),
         type: "text",
         content: body.trim()
-      });
-    }
-
-    if (pdfName) {
-      widgets.push({
-        id: crypto.randomUUID(),
-        type: "pdf",
-        filename: pdfName
       });
     }
 
@@ -111,14 +102,17 @@ export default function NewPostModal({
             <input
               type="file"
               accept="application/pdf"
-              onChange={(e) => setPdfName(e.target.files?.[0]?.name ?? "")}
-              className="focus-ring mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              disabled
+              title="PDF attachments will be re-added in future when more database storage is added."
+              className="mt-2 w-full cursor-not-allowed rounded-lg border border-line bg-slate-100 px-3 py-2 text-sm text-slate-400"
             />
+            <span className="mt-1 block text-xs font-semibold text-slate-400">
+              PDF attachments will be re-added in future when more database storage is added.
+            </span>
           </label>
 
           <p className="rounded-lg bg-panel px-3 py-2 text-xs font-semibold text-slate-500">
-            The post type is detected from its widgets: written content, PDF
-            attachment, or both.
+            The post type is detected from its widgets. PDF attachments are paused for now.
           </p>
 
           <VisibilityEditor

@@ -11,7 +11,7 @@ export type TextWidget = {
   italic?: boolean;
   underline?: boolean;
 };
-export type ImageWidget = { id: string; type: "image"; src: string; caption: string };
+export type ImageWidget = { id: string; type: "image"; src: string; caption: string; storagePath?: string };
 export type PdfWidget = { id: string; type: "pdf"; filename: string };
 export type CalloutWidget = {
   id: string;
