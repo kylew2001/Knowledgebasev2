@@ -126,6 +126,18 @@ function AddWidgetBar({ onAdd }: { onAdd: (w: Widget) => void }) {
 
 // ── Individual widget renderers ──────────────────────────────────────────────
 
+const AUTO_LINK_TLDS = [
+  "com", "org", "net", "edu", "gov", "mil", "co", "info", "biz",
+  "io", "ai", "app", "dev", "cloud", "tech", "support", "help",
+  "nz", "au", "us", "uk", "eu", "ie", "de", "fr", "it", "es",
+  "nl", "be", "ch", "se", "no", "dk", "fi", "pl", "at"
+];
+
+const AUTO_LINK_PATTERN = new RegExp(
+  `(^|[^\\w@])((?:https?:\\/\\/)?(?:www\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:${AUTO_LINK_TLDS.join("|")})(?::\\d{2,5})?(?:\\/[^\\s<>()]*)?)`,
+  "gi"
+);
+
 function TextWidgetView({ w }: { w: TextWidget }) {
   const textStyle: CSSProperties = {
     color: w.color ?? "#334155",
@@ -136,13 +148,50 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     textDecoration: w.underline ? "underline" : "none"
   };
 
-  function renderInlineBold(text: string): ReactNode[] {
-    return text.split(/(\*\*.*?\*\*)/g).map((part, index) => {
+  function renderLinks(text: string, keyPrefix: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    const trailingPunctuation = /[.,!?;:]+$/;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    AUTO_LINK_PATTERN.lastIndex = 0;
+    while ((match = AUTO_LINK_PATTERN.exec(text)) !== null) {
+      const prefix = match[1];
+      const rawUrl = match[2];
+      const urlStart = match.index + prefix.length;
+      const punctuation = rawUrl.match(trailingPunctuation)?.[0] ?? "";
+      const label = punctuation ? rawUrl.slice(0, -punctuation.length) : rawUrl;
+      const href = /^https?:\/\//i.test(label) ? label : `https://${label}`;
+
+      if (urlStart > lastIndex) nodes.push(text.slice(lastIndex, urlStart));
+      nodes.push(
+        <a
+          key={`${keyPrefix}-${urlStart}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="font-semibold text-brand underline underline-offset-2 hover:text-teal-800"
+        >
+          {label}
+        </a>
+      );
+      if (punctuation) nodes.push(punctuation);
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+
+    return nodes.length ? nodes : [text];
+  }
+
+  function renderInlineContent(text: string): ReactNode[] {
+    return text.split(/(\*\*.*?\*\*)/g).flatMap((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
-        return <strong key={index}>{part.slice(2, -2)}</strong>;
+        return <strong key={index}>{renderLinks(part.slice(2, -2), `bold-${index}`)}</strong>;
       }
 
-      return part;
+      return renderLinks(part, `plain-${index}`);
     });
   }
 
@@ -166,7 +215,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     }
 
     if (line.startsWith("**") && line.endsWith("**")) {
-      blocks.push(<p key={index} className="font-semibold" style={textStyle}>{renderInlineBold(line)}</p>);
+      blocks.push(<p key={index} className="font-semibold" style={textStyle}>{renderInlineContent(line)}</p>);
       index += 1;
       continue;
     }
@@ -178,7 +227,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       while (index < lines.length && lines[index].startsWith("- [ ]")) {
         items.push(
           <li key={index} className="list-none text-slate-600">
-            <span aria-hidden="true">[ ]</span> {renderInlineBold(lines[index].slice(5).trimStart())}
+            <span aria-hidden="true">[ ]</span> {renderInlineContent(lines[index].slice(5).trimStart())}
           </li>
         );
         index += 1;
@@ -193,7 +242,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       const listStart = index;
 
       while (index < lines.length && lines[index].startsWith("- ")) {
-        items.push(<li key={index}>{renderInlineBold(lines[index].slice(2))}</li>);
+        items.push(<li key={index}>{renderInlineContent(lines[index].slice(2))}</li>);
         index += 1;
       }
 
@@ -206,7 +255,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       const listStart = index;
 
       while (index < lines.length && /^\d+\.\s/.test(lines[index])) {
-        items.push(<li key={index}>{renderInlineBold(lines[index].replace(/^\d+\.\s*/, ""))}</li>);
+        items.push(<li key={index}>{renderInlineContent(lines[index].replace(/^\d+\.\s*/, ""))}</li>);
         index += 1;
       }
 
@@ -214,7 +263,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       continue;
     }
 
-    blocks.push(<p key={index} style={textStyle}>{renderInlineBold(line)}</p>);
+    blocks.push(<p key={index} style={textStyle}>{renderInlineContent(line)}</p>);
     index += 1;
   }
 
