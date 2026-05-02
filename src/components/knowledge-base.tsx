@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BookOpen, ChevronRight, FileText, FolderPlus, Home, Pencil, PenLine, Plus, Search, Upload, X } from "lucide-react";
+import { BookOpen, ChevronRight, FileText, FolderPlus, Home, Pencil, PenLine, Plus, Search, X } from "lucide-react";
 import { categoryCards, iconOptions, mockPosts, type MockPost } from "@/lib/mock-data";
 import CardBuilderModal from "@/components/CardBuilderModal";
 import SubCategoryModal from "@/components/SubCategoryModal";
@@ -448,9 +448,6 @@ export function KnowledgeBase({
               <Plus className="h-4 w-4" /> New Post
             </button>
           )}
-          <button className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
-            <Upload className="h-4 w-4" /> Bulk PDFs
-          </button>
         </div>
       </header>
 
