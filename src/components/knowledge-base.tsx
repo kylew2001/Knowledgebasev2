@@ -89,8 +89,8 @@ function EditCategoryModal({ category, groups, onClose, onSave }: EditCategoryMo
   const PreviewIcon = iconOptions.find((o) => o.name === iconName)?.icon ?? category.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-lg rounded-lg border border-line bg-white p-6 shadow-soft">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
+      <div className="my-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-line bg-white p-4 shadow-soft sm:my-4 sm:max-h-[calc(100dvh-2rem)] sm:p-6">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">Edit category</h2>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-panel"><X className="h-5 w-5 text-slate-500" /></button>
@@ -200,8 +200,8 @@ function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initial
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-line bg-white p-6 shadow-soft">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
+      <div className="my-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-sm overflow-y-auto rounded-lg border border-line bg-white p-4 shadow-soft sm:my-4 sm:max-h-[calc(100dvh-2rem)] sm:p-6">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-ink">Edit subcategory</h2>
