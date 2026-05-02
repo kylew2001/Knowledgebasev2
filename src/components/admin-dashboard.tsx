@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
+  ExternalLink,
   FolderTree,
   KeyRound,
   Lock,
@@ -14,6 +15,7 @@ import {
   Mail,
   Pencil,
   Plus,
+  Share2,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -25,6 +27,7 @@ import {
   type AdminUser,
   type SecuritySettings,
   type AuditLog,
+  type SharedPostLink,
   type StorageStats,
   createGroup,
   deleteGroup,
@@ -36,7 +39,8 @@ import {
   resetUserTwoFactor,
   sendAdminTestEmail,
   saveSecuritySettings,
-  updateGroup
+  updateGroup,
+  revokeSharedPostLink
 } from "@/app/(app)/admin/actions";
 import EditUserModal from "@/components/EditUserModal";
 import NewUserModal from "@/components/NewUserModal";
@@ -49,6 +53,7 @@ type Props = {
   auditLogs: AuditLog[];
   auditTotal: number;
   storageStats: StorageStats;
+  sharedLinks: SharedPostLink[];
 };
 
 type GroupForm = {
@@ -69,16 +74,24 @@ function fmtAction(a: string) {
   return a.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function getShareStatus(link: SharedPostLink) {
+  if (link.revoked_at) return "Revoked";
+  if (new Date(link.expires_at).getTime() <= Date.now()) return "Expired";
+  return "Active";
+}
+
 export function AdminDashboard({
   users: initialUsers,
   groups: initialGroups,
   securitySettings,
   auditLogs,
   auditTotal,
-  storageStats
+  storageStats,
+  sharedLinks: initialSharedLinks
 }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [groups, setGroups] = useState(initialGroups);
+  const [sharedLinks, setSharedLinks] = useState(initialSharedLinks);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
@@ -92,6 +105,8 @@ export function AdminDashboard({
   const [groupError, setGroupError] = useState<string | null>(null);
   const [groupSaved, setGroupSaved] = useState(false);
   const [groupPending, startGroupTransition] = useTransition();
+  const [sharePendingId, setSharePendingId] = useState<string | null>(null);
+  const [, startShareTransition] = useTransition();
 
   // Role select state
   const [userRoles, setUserRoles] = useState<Record<string, string>>(
@@ -305,6 +320,22 @@ export function AdminDashboard({
       }
       setTestEmailStatus("sent");
       setTimeout(() => setTestEmailStatus(null), 3000);
+    });
+  }
+
+  function handleRevokeShare(link: SharedPostLink) {
+    if (!window.confirm(`Revoke the shared link for ${link.post_title}?`)) return;
+
+    setSharePendingId(link.id);
+    startShareTransition(async () => {
+      const result = await revokeSharedPostLink(link.id);
+      setSharePendingId(null);
+      if (result?.error) return;
+      setSharedLinks((prev) =>
+        prev.map((item) =>
+          item.id === link.id ? { ...item, revoked_at: new Date().toISOString() } : item
+        )
+      );
     });
   }
 
@@ -660,6 +691,88 @@ export function AdminDashboard({
             )}
           </div>
         )}
+      </section>
+
+      <section className="rounded-lg border border-line bg-white p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-ink">Shared post links</h3>
+            <p className="text-sm text-slate-500">View active, expired, and revoked post-only links.</p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-sm font-bold text-teal-800">
+            <Share2 className="h-4 w-4" />
+            {sharedLinks.filter((link) => getShareStatus(link) === "Active").length} active
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-500">
+                <th className="border-b border-line px-3 py-2">Post</th>
+                <th className="border-b border-line px-3 py-2">Created by</th>
+                <th className="border-b border-line px-3 py-2">Created</th>
+                <th className="border-b border-line px-3 py-2">Expires</th>
+                <th className="border-b border-line px-3 py-2">Status</th>
+                <th className="border-b border-line px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sharedLinks.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
+                    No shared links yet.
+                  </td>
+                </tr>
+              ) : (
+                sharedLinks.map((link) => {
+                  const status = getShareStatus(link);
+                  return (
+                    <tr key={link.id}>
+                      <td className="border-b border-line px-3 py-3">
+                        <p className="font-semibold text-ink">{link.post_title}</p>
+                        <p className="text-xs text-slate-500">{link.post_category} / {link.post_subcategory}</p>
+                      </td>
+                      <td className="border-b border-line px-3 py-3 text-slate-600">{link.created_by_name}</td>
+                      <td className="border-b border-line px-3 py-3 text-slate-600">
+                        {new Date(link.created_at).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" })}
+                      </td>
+                      <td className="border-b border-line px-3 py-3 text-slate-600">
+                        {new Date(link.expires_at).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" })}
+                      </td>
+                      <td className="border-b border-line px-3 py-3">
+                        <span className={`rounded-md px-2 py-1 text-xs font-bold ${
+                          status === "Active"
+                            ? "bg-teal-50 text-teal-800"
+                            : status === "Expired"
+                              ? "bg-slate-100 text-slate-600"
+                              : "bg-red-50 text-red-700"
+                        }`}>
+                          {status}
+                        </span>
+                      </td>
+                      <td className="border-b border-line px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <span title="Raw share URLs are not stored after creation." className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line text-slate-300">
+                            <ExternalLink className="h-4 w-4" />
+                          </span>
+                          <button
+                            type="button"
+                            disabled={status !== "Active" || sharePendingId === link.id}
+                            onClick={() => handleRevokeShare(link)}
+                            className="focus-ring rounded-lg border border-line px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-white"
+                          >
+                            {sharePendingId === link.id ? "Revoking..." : "Revoke"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Audit logs */}

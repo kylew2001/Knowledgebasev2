@@ -37,6 +37,18 @@ export type StorageStats = {
   total_bytes: number;
 };
 
+export type SharedPostLink = {
+  id: string;
+  post_id: string;
+  post_title: string;
+  post_category: string;
+  post_subcategory: string;
+  created_by_name: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+};
+
 export type AdminGroup = {
   id: string;
   parent_id: string | null;
@@ -522,4 +534,70 @@ export async function getStorageStats(): Promise<StorageStats> {
   const used_bytes = (data ?? []).reduce((sum, row) => sum + (row.file_size_bytes ?? 0), 0);
 
   return { used_bytes, total_bytes: 1073741824 };
+}
+
+export async function listSharedPostLinks(): Promise<SharedPostLink[]> {
+  await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("post_shares")
+    .select(`
+      id,
+      post_id,
+      created_at,
+      expires_at,
+      revoked_at,
+      kb_posts(title, category, subcategory),
+      profiles!post_shares_created_by_fkey(display_name, username)
+    `)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error || !data) return [];
+
+  return data.map((row) => {
+    const typed = row as unknown as {
+      id: string;
+      post_id: string;
+      created_at: string;
+      expires_at: string;
+      revoked_at: string | null;
+      kb_posts: { title: string; category: string; subcategory: string } | null;
+      profiles: { display_name: string | null; username: string | null } | null;
+    };
+
+    return {
+      id: typed.id,
+      post_id: typed.post_id,
+      post_title: typed.kb_posts?.title ?? "Deleted post",
+      post_category: typed.kb_posts?.category ?? "",
+      post_subcategory: typed.kb_posts?.subcategory ?? "",
+      created_by_name: typed.profiles?.display_name ?? typed.profiles?.username ?? "Unknown",
+      created_at: typed.created_at,
+      expires_at: typed.expires_at,
+      revoked_at: typed.revoked_at
+    };
+  });
+}
+
+export async function revokeSharedPostLink(shareId: string) {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data: share } = await admin
+    .from("post_shares")
+    .select("id, post_id")
+    .eq("id", shareId)
+    .single();
+
+  const { error } = await admin
+    .from("post_shares")
+    .update({ revoked_at: new Date().toISOString(), revoked_by: current.user.id })
+    .eq("id", shareId);
+
+  if (error) return { error: error.message };
+
+  await writeAuditLog(admin, current.profile.id, "post_share_revoked", share?.post_id ?? shareId);
+  return null;
 }

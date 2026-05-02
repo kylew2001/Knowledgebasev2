@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes, createHash } from "crypto";
 import { getCurrentProfile } from "@/lib/auth";
 import { derivePostType, type Widget } from "@/lib/post-content";
 import { createClient } from "@/lib/supabase/server";
@@ -17,6 +18,8 @@ type KbPostRow = {
   widgets: Widget[];
   visibility: VisibilityRule;
 };
+
+const MAX_SHARE_HOURS = 24 * 30;
 
 async function withSignedImageUrls(widgets: Widget[], expiresIn = 60 * 60 * 24) {
   const supabase = await createClient();
@@ -143,4 +146,34 @@ export async function savePostsToDatabase(posts: MockPost[]) {
   }
 
   return { ok: true };
+}
+
+function hashShareToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export async function createPostShare(postId: string, durationHours: number) {
+  const current = await getCurrentProfile();
+  if (!current || !["super_admin", "editor"].includes(current.profile.role)) {
+    return { ok: false, error: "You do not have permission to share posts." };
+  }
+
+  const hours = Math.max(1, Math.min(MAX_SHARE_HOURS, Math.round(durationHours)));
+  const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const token = randomBytes(32).toString("base64url");
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("post_shares").insert({
+    post_id: postId,
+    token_hash: hashShareToken(token),
+    created_by: current.user.id,
+    expires_at: expiresAt
+  });
+
+  if (error) {
+    console.error("Failed to create post share", error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true, token, expiresAt };
 }

@@ -4,12 +4,13 @@ import {
   listGroups,
   getSecuritySettings,
   getAuditLogs,
-  getStorageStats
+  getStorageStats,
+  listSharedPostLinks
 } from "@/app/(app)/admin/actions";
 
 export default async function AdminPage() {
-  const [users, groups, securitySettings, { logs: auditLogs, total: auditTotal }, storageStats] =
-    await Promise.all([listUsers(), listGroups(), getSecuritySettings(), getAuditLogs(), getStorageStats()]);
+  const [users, groups, securitySettings, { logs: auditLogs, total: auditTotal }, storageStats, sharedLinks] =
+    await Promise.all([listUsers(), listGroups(), getSecuritySettings(), getAuditLogs(), getStorageStats(), listSharedPostLinks()]);
 
   return (
     <AdminDashboard
@@ -19,6 +20,7 @@ export default async function AdminPage() {
       auditLogs={auditLogs}
       auditTotal={auditTotal}
       storageStats={storageStats}
+      sharedLinks={sharedLinks}
     />
   );
 }

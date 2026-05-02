@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bold,
@@ -24,6 +24,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Share2,
   Table2,
   Trash2,
   Type,
@@ -36,6 +37,7 @@ import { derivePostType } from "@/lib/post-content";
 import { createClient } from "@/lib/supabase/client";
 import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
 import VisibilityEditor from "@/components/VisibilityEditor";
+import { createPostShare } from "@/app/(app)/knowledge-base/actions";
 
 // ── Widget types ────────────────────────────────────────────────────────────
 
@@ -1243,10 +1245,12 @@ function LinkWidgetEditor({
 type Props = {
   post: MockPost;
   userRole: UserRole;
-  onBack: () => void;
+  onBack?: () => void;
   categoryTitle: string;
   groups: VisibilityGroup[];
   onSavePost?: (widgets: Widget[], visibility: VisibilityRule) => void;
+  sharedView?: boolean;
+  shareExpiresAt?: string;
 };
 
 const typeConfig = {
@@ -1270,13 +1274,36 @@ function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
   return typeConfig.written;
 }
 
-export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSavePost }: Props) {
+export function PostPage({
+  post,
+  userRole,
+  onBack,
+  categoryTitle,
+  groups,
+  onSavePost,
+  sharedView = false,
+  shareExpiresAt
+}: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const [editing, setEditing] = useState(false);
   const [widgets, setWidgets] = useState<Widget[]>(post.widgets ?? defaultContent[post.id] ?? []);
   const [draft, setDraft] = useState<Widget[]>(widgets);
   const [visibility, setVisibility] = useState<VisibilityRule>(post.visibility ?? { mode: "everyone", groupIds: [] });
   const [draftVisibility, setDraftVisibility] = useState<VisibilityRule>(visibility);
+  const [showShare, setShowShare] = useState(false);
+  const [shareDuration, setShareDuration] = useState<"1" | "24" | "168" | "custom">("24");
+  const [customShareValue, setCustomShareValue] = useState("2");
+  const [customShareUnit, setCustomShareUnit] = useState<"hours" | "days">("hours");
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [sharePending, setSharePending] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!shareExpiresAt) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [shareExpiresAt]);
 
   function startEdit() {
     setDraft(widgets);
@@ -1289,6 +1316,43 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
     setVisibility(draftVisibility);
     onSavePost?.(draft, draftVisibility);
     setEditing(false);
+  }
+
+  function getShareHours() {
+    if (shareDuration !== "custom") return Number(shareDuration);
+    const value = Math.max(1, Number(customShareValue) || 1);
+    return customShareUnit === "days" ? value * 24 : value;
+  }
+
+  async function handleCreateShare() {
+    setShareError(null);
+    setShareUrl("");
+    setSharePending(true);
+    const result = await createPostShare(post.id, getShareHours());
+    setSharePending(false);
+
+    if (!result.ok || !result.token) {
+      setShareError(result.error ?? "Share link could not be created.");
+      return;
+    }
+
+    const url = `${window.location.origin}/share/${result.token}`;
+    setShareUrl(url);
+    await navigator.clipboard?.writeText(url).catch(() => undefined);
+  }
+
+  function formatShareRemaining() {
+    if (!shareExpiresAt) return "";
+    const remaining = Math.max(0, new Date(shareExpiresAt).getTime() - now);
+    const totalMinutes = Math.ceil(remaining / 60000);
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (totalMinutes <= 0) return "Expired";
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
   }
 
   function insertWidget(w: Widget, afterIndex: number) {
@@ -1356,13 +1420,25 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
       {/* Header */}
       <header className="flex flex-col gap-4 rounded-lg border border-line bg-white p-5 shadow-soft md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-2 text-sm text-slate-400">
-            <button onClick={() => onBack()} className="hover:text-slate-600">Knowledge Base</button>
-            <ChevronRight className="h-3 w-3" />
-            <span>{categoryTitle}</span>
-            <ChevronRight className="h-3 w-3" />
-            <span>{post.subcategory}</span>
-          </div>
+          {sharedView ? (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-brand">
+              <Share2 className="h-4 w-4" />
+              <span>Shared post</span>
+              {shareExpiresAt && (
+                <span className="rounded-md bg-teal-50 px-2 py-1 text-xs text-teal-800">
+                  Expires in {formatShareRemaining()}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-400">
+              <button onClick={() => onBack?.()} className="hover:text-slate-600">Knowledge Base</button>
+              <ChevronRight className="h-3 w-3" />
+              <span>{categoryTitle}</span>
+              <ChevronRight className="h-3 w-3" />
+              <span>{post.subcategory}</span>
+            </div>
+          )}
           <h2 className="text-2xl font-bold text-ink">{post.title || "Untitled post"}</h2>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${cfg.bg} ${cfg.fg}`}>
@@ -1372,7 +1448,7 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
             <span className="text-xs text-slate-400">{post.publishedBy || "Unknown"} · {formatDate(post.publishedAt)}</span>
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
+        {!sharedView && <div className="flex shrink-0 gap-2">
           {editing ? (
             <>
               <button onClick={cancelEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
@@ -1388,14 +1464,81 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
                 <Home className="h-4 w-4" /> Back
               </button>
               {canEdit && (
-                <button onClick={startEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-                  <Pencil className="h-4 w-4" /> Edit
-                </button>
+                <>
+                  <button onClick={() => setShowShare(true)} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
+                    <Share2 className="h-4 w-4" /> Share
+                  </button>
+                  <button onClick={startEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+                    <Pencil className="h-4 w-4" /> Edit
+                  </button>
+                </>
               )}
             </>
           )}
-        </div>
+        </div>}
       </header>
+
+      {showShare && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
+          <div className="my-3 max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-lg border border-line bg-white p-4 shadow-soft sm:my-4 sm:max-h-[calc(100dvh-2rem)] sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-ink">Share post</h3>
+                <p className="text-sm text-slate-500">Create a view-only link that expires automatically.</p>
+              </div>
+              <button type="button" onClick={() => setShowShare(false)} className="focus-ring rounded-lg p-1 hover:bg-panel">
+                <X className="h-5 w-5 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "1 hour", value: "1" },
+                  { label: "1 day", value: "24" },
+                  { label: "1 week", value: "168" }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setShareDuration(option.value as "1" | "24" | "168")}
+                    className={`focus-ring h-10 rounded-lg border text-sm font-semibold ${shareDuration === option.value ? "border-brand bg-teal-50 text-brand" : "border-line text-slate-600 hover:bg-panel"}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <button type="button" onClick={() => setShareDuration("custom")} className={`focus-ring h-10 w-full rounded-lg border text-sm font-semibold ${shareDuration === "custom" ? "border-brand bg-teal-50 text-brand" : "border-line text-slate-600 hover:bg-panel"}`}>
+                Custom time
+              </button>
+
+              {shareDuration === "custom" && (
+                <div className="grid grid-cols-[1fr_120px] gap-2">
+                  <input type="number" min={1} value={customShareValue} onChange={(e) => setCustomShareValue(e.target.value)} className="focus-ring h-10 rounded-lg border border-line px-3 text-sm" />
+                  <select value={customShareUnit} onChange={(e) => setCustomShareUnit(e.target.value as "hours" | "days")} className="focus-ring h-10 rounded-lg border border-line bg-white px-3 text-sm">
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+              )}
+
+              <button type="button" onClick={handleCreateShare} disabled={sharePending} className="focus-ring inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
+                <Share2 className="h-4 w-4" />
+                {sharePending ? "Creating..." : "Create and copy link"}
+              </button>
+
+              {shareError && <p className="text-sm text-red-600">{shareError}</p>}
+              {shareUrl && (
+                <div className="rounded-lg border border-line bg-panel p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Copied link</p>
+                  <p className="mt-1 break-all text-sm font-semibold text-ink">{shareUrl}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="rounded-lg border border-line bg-white p-6 shadow-soft">
