@@ -58,6 +58,17 @@ async function setMfaCookieForRole(role: string): Promise<void> {
   });
 }
 
+async function hasRememberedMfaDevice(role: string): Promise<boolean> {
+  const cookieStore = await cookies();
+  const mfaAt = cookieStore.get("mfa_at")?.value;
+  const mfaTime = mfaAt ? new Date(mfaAt).getTime() : Number.NaN;
+
+  if (Number.isNaN(mfaTime)) return false;
+  if (role !== "super_admin") return true;
+
+  return Date.now() - mfaTime <= 24 * 60 * 60 * 1000;
+}
+
 export async function completeMfaVerification(): Promise<void> {
   const current = await getCurrentProfile();
   await setMfaCookieForRole(current?.profile.role ?? "viewer");
@@ -150,14 +161,10 @@ export async function signInWithUsername(
     redirect("/auth/setup-2fa");
   }
 
-  // Remember device: editor/viewer with existing mfa_at cookie skip MFA challenge
+  // Remember device: super_admin for 24 hours, editor/viewer for 1 year.
   const role = (profile?.role as string) ?? "viewer";
-  if (role !== "super_admin") {
-    const cookieStore = await cookies();
-    const mfaAt = cookieStore.get("mfa_at")?.value;
-    if (mfaAt) {
-      redirect("/knowledge-base");
-    }
+  if (await hasRememberedMfaDevice(role)) {
+    redirect("/knowledge-base");
   }
 
   // Check for verified TOTP factors
