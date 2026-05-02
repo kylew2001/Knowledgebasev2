@@ -18,6 +18,7 @@ type Category = (typeof categoryCards)[number] & {
 };
 
 const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
+const POST_STORAGE_KEY = "knowledgebase-v2-posts";
 
 const typeConfig = {
   pdf:     { label: "PDF",     icon: FileText, bg: "bg-orange-50", fg: "text-orange-600" },
@@ -49,6 +50,29 @@ function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
 function getStoredPostType(widgets: import("@/lib/post-content").Widget[]) {
   const derivedType = derivePostType(widgets);
   return derivedType === "empty" ? undefined : derivedType;
+}
+
+function loadStoredPosts() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(POST_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as MockPost[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredPosts(posts: MockPost[]) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(POST_STORAGE_KEY, JSON.stringify(posts));
+  } catch {
+    // Saving should never block editing if browser storage is unavailable.
+  }
 }
 
 function getCategoryResourceCount(posts: MockPost[], categoryTitle: string) {
@@ -275,6 +299,7 @@ export function KnowledgeBase({
 
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [posts, setPosts] = useState<MockPost[]>(mockPosts);
+  const [postsHydrated, setPostsHydrated] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<MockPost | null>(null);
@@ -290,6 +315,17 @@ export function KnowledgeBase({
     window.addEventListener("kb-navigate-home", handler);
     return () => window.removeEventListener("kb-navigate-home", handler);
   }, []);
+
+  useEffect(() => {
+    const storedPosts = loadStoredPosts();
+    if (storedPosts) setPosts(storedPosts);
+    setPostsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!postsHydrated) return;
+    saveStoredPosts(posts);
+  }, [posts, postsHydrated]);
 
   function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); setSearch(""); }
   function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); setSelectedPost(null); }
