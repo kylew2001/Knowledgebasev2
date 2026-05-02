@@ -6,6 +6,9 @@ import {
   Bold,
   BookOpen,
   ChevronRight,
+  Check,
+  Clipboard,
+  Code2,
   FileText,
   Home,
   Image as ImageIcon,
@@ -46,9 +49,10 @@ type TextWidget = {
 type ImageWidget   = { id: string; type: "image";   src: string; caption: string };
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
 type CalloutWidget = { id: string; type: "callout"; variant: "info" | "warning" | "success"; content: string };
+type CodeWidget    = { id: string; type: "code"; language: string; filename?: string; content: string };
 type DividerWidget = { id: string; type: "divider" };
 
-type Widget = TextWidget | ImageWidget | PdfWidget | CalloutWidget | DividerWidget;
+type Widget = TextWidget | ImageWidget | PdfWidget | CalloutWidget | CodeWidget | DividerWidget;
 
 // ── Sample default content for seeded posts ─────────────────────────────────
 
@@ -83,6 +87,7 @@ const widgetTypes = [
   { type: "image"   as const, label: "Image",   icon: ImageIcon    },
   { type: "pdf"     as const, label: "PDF",     icon: FileText     },
   { type: "callout" as const, label: "Callout", icon: Info         },
+  { type: "code"    as const, label: "Code",    icon: Code2        },
   { type: "divider" as const, label: "Divider", icon: Minus        },
 ];
 
@@ -92,6 +97,7 @@ function blankWidget(type: Widget["type"]): Widget {
     case "image":   return { id: newId(), type: "image", src: "", caption: "" };
     case "pdf":     return { id: newId(), type: "pdf", filename: "" };
     case "callout": return { id: newId(), type: "callout", variant: "info", content: "" };
+    case "code":    return { id: newId(), type: "code", language: "PowerShell", filename: "", content: "" };
     case "divider": return { id: newId(), type: "divider" };
   }
 }
@@ -137,6 +143,25 @@ const AUTO_LINK_PATTERN = new RegExp(
   `(^|[^\\w@])((?:https?:\\/\\/)?(?:www\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:${AUTO_LINK_TLDS.join("|")})(?::\\d{2,5})?(?:\\/[^\\s<>()]*)?)`,
   "gi"
 );
+
+const codeLanguages = [
+  "Plain text",
+  "PowerShell",
+  "Command Prompt",
+  "Bash",
+  "SQL",
+  "JSON",
+  "XML",
+  "YAML",
+  "JavaScript",
+  "TypeScript",
+  "HTML",
+  "CSS",
+  "PHP",
+  "Python",
+  "C#",
+  "Markdown"
+];
 
 function TextWidgetView({ w }: { w: TextWidget }) {
   const textStyle: CSSProperties = {
@@ -392,6 +417,92 @@ function CalloutView({ w }: { w: CalloutWidget }) {
 
 // ── Main PostPage component ──────────────────────────────────────────────────
 
+function CodeWidgetView({ w }: { w: CodeWidget }) {
+  const [copied, setCopied] = useState(false);
+  const language = w.language || "Plain text";
+  const code = w.content || "";
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-300">{language}</p>
+          {w.filename && <p className="truncate text-xs text-slate-500">{w.filename}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={copyCode}
+          className="focus-ring inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-slate-700 px-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="max-w-full overflow-x-auto p-4 text-sm leading-6 text-slate-100">
+        <code className="font-mono">{code || "// Add code here"}</code>
+      </pre>
+    </div>
+  );
+}
+
+function CodeWidgetEditor({
+  widget,
+  onChange
+}: {
+  widget: CodeWidget;
+  onChange: (widget: CodeWidget) => void;
+}) {
+  function update(patch: Partial<CodeWidget>) {
+    onChange({ ...widget, ...patch });
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
+      <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Language</span>
+          <select
+            value={widget.language || "Plain text"}
+            onChange={(e) => update({ language: e.target.value })}
+            className="focus-ring mt-2 h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+          >
+            {codeLanguages.map((language) => (
+              <option key={language} value={language}>{language}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filename</span>
+          <input
+            value={widget.filename ?? ""}
+            onChange={(e) => update({ filename: e.target.value })}
+            placeholder="Optional, e.g. reset-password.ps1"
+            className="focus-ring mt-2 h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+          />
+        </label>
+      </div>
+      <textarea
+        value={widget.content}
+        onChange={(e) => update({ content: e.target.value })}
+        rows={10}
+        spellCheck={false}
+        placeholder="Paste or write code here..."
+        className="focus-ring w-full rounded-lg border border-line bg-slate-950 px-3 py-3 font-mono text-sm leading-6 text-slate-100"
+      />
+    </div>
+  );
+}
+
 type Props = {
   post: MockPost;
   userRole: UserRole;
@@ -584,6 +695,11 @@ export function PostPage({ post, userRole, onBack, categoryTitle, groups, onSave
                       className="focus-ring w-full rounded-lg border border-line px-3 py-2 text-sm"
                     />
                   </div>
+                )}
+
+                {widget.type === "code" && !editing && <CodeWidgetView w={widget} />}
+                {widget.type === "code" && editing && (
+                  <CodeWidgetEditor widget={widget} onChange={updateWidget} />
                 )}
 
                 {widget.type === "image" && !editing && (

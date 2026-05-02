@@ -59,6 +59,7 @@ function getPostSearchText(post: MockPost) {
   const widgetText = getPostWidgets(post)
     .map((widget) => {
       if (widget.type === "text" || widget.type === "callout") return widget.content;
+      if (widget.type === "code") return `${widget.language} ${widget.filename ?? ""} ${widget.content}`;
       if (widget.type === "image") return `${widget.caption} ${widget.src}`;
       if (widget.type === "pdf") return widget.filename;
       return "";

@@ -19,6 +19,13 @@ export type CalloutWidget = {
   variant: "info" | "warning" | "success";
   content: string;
 };
+export type CodeWidget = {
+  id: string;
+  type: "code";
+  language: string;
+  filename?: string;
+  content: string;
+};
 export type DividerWidget = { id: string; type: "divider" };
 
 export type Widget =
@@ -26,6 +33,7 @@ export type Widget =
   | ImageWidget
   | PdfWidget
   | CalloutWidget
+  | CodeWidget
   | DividerWidget;
 
 export const defaultContent: Record<string, Widget[]> = {
@@ -63,6 +71,7 @@ export function derivePostType(
     (widget) =>
       widget.type === "text" ||
       widget.type === "callout" ||
+      widget.type === "code" ||
       widget.type === "image" ||
       widget.type === "divider"
   );
