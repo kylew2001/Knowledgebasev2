@@ -398,6 +398,10 @@ function highlightCode(code: string, language: string): ReactNode[] {
 }
 
 function TextWidgetView({ w }: { w: TextWidget }) {
+  const content = typeof w.content === "string" ? w.content : "";
+  const richLines = Array.isArray(w.richLines)
+    ? w.richLines.filter((line): line is RichTextLine => Boolean(line) && typeof line === "object")
+    : [];
   const baseTextStyle: CSSProperties = {
     color: w.color ?? "#334155",
     fontFamily: w.fontFamily ?? "Inter, system-ui, sans-serif",
@@ -419,13 +423,14 @@ function TextWidgetView({ w }: { w: TextWidget }) {
   }
 
   function renderLinks(text: string, keyPrefix: string): ReactNode[] {
+    const safeText = String(text ?? "");
     const nodes: ReactNode[] = [];
     const trailingPunctuation = /[.,!?;:]+$/;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
     AUTO_LINK_PATTERN.lastIndex = 0;
-    while ((match = AUTO_LINK_PATTERN.exec(text)) !== null) {
+    while ((match = AUTO_LINK_PATTERN.exec(safeText)) !== null) {
       const prefix = match[1];
       const rawUrl = match[2];
       const urlStart = match.index + prefix.length;
@@ -433,7 +438,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       const label = punctuation ? rawUrl.slice(0, -punctuation.length) : rawUrl;
       const href = /^https?:\/\//i.test(label) ? label : `https://${label}`;
 
-      if (urlStart > lastIndex) nodes.push(text.slice(lastIndex, urlStart));
+      if (urlStart > lastIndex) nodes.push(safeText.slice(lastIndex, urlStart));
       nodes.push(
         <a
           key={`${keyPrefix}-${urlStart}`}
@@ -450,13 +455,13 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+    if (lastIndex < safeText.length) nodes.push(safeText.slice(lastIndex));
 
-    return nodes.length ? nodes : [text];
+    return nodes.length ? nodes : [safeText];
   }
 
   function renderInlineContent(text: string): ReactNode[] {
-    return text.split(/(\*\*.*?\*\*)/g).flatMap((part, index) => {
+    return String(text ?? "").split(/(\*\*.*?\*\*)/g).flatMap((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return <strong key={index}>{renderLinks(part.slice(2, -2), `bold-${index}`)}</strong>;
       }
@@ -472,8 +477,10 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     while (index < lines.length) {
       const line = lines[index];
 
-      if (!line.text && !line.listType) {
-        blocks.push(<br key={line.id} />);
+      const lineText = typeof line.text === "string" ? line.text : "";
+
+      if (!lineText && !line.listType) {
+        blocks.push(<br key={line.id ?? index} />);
         index += 1;
         continue;
       }
@@ -486,8 +493,8 @@ function TextWidgetView({ w }: { w: TextWidget }) {
         while (index < lines.length && lines[index].listType === listType) {
           const currentLine = lines[index];
           items.push(
-            <li key={currentLine.id} style={lineStyle(currentLine)}>
-              {renderInlineContent(currentLine.text)}
+            <li key={currentLine.id ?? index} style={lineStyle(currentLine)}>
+              {renderInlineContent(currentLine.text ?? "")}
             </li>
           );
           index += 1;
@@ -495,7 +502,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
 
         const ListTag = listType === "numbered" ? "ol" : "ul";
         blocks.push(
-          <ListTag key={lines[listStart].id} className={`ml-5 space-y-1 ${listType === "numbered" ? "list-decimal" : "list-disc"}`}>
+          <ListTag key={lines[listStart].id ?? listStart} className={`ml-5 space-y-1 ${listType === "numbered" ? "list-decimal" : "list-disc"}`}>
             {items}
           </ListTag>
         );
@@ -503,8 +510,8 @@ function TextWidgetView({ w }: { w: TextWidget }) {
       }
 
       blocks.push(
-        <p key={line.id} style={lineStyle(line)}>
-          {renderInlineContent(line.text)}
+        <p key={line.id ?? index} style={lineStyle(line)}>
+          {renderInlineContent(lineText)}
         </p>
       );
       index += 1;
@@ -513,16 +520,16 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     return blocks;
   }
 
-  if (w.richLines?.length) {
+  if (richLines.length) {
     return (
       <div className="prose prose-sm max-w-none" style={baseTextStyle}>
-        {renderRichLineBlocks(w.richLines)}
+        {renderRichLineBlocks(richLines)}
       </div>
     );
   }
 
   const blocks: ReactNode[] = [];
-  const lines = w.content.split("\n");
+  const lines = content.split("\n");
   let index = 0;
 
   while (index < lines.length) {
@@ -614,12 +621,13 @@ function TextWidgetEditor({
   }
 
   function getRichLines(): RichTextLine[] {
-    const textLines = widget.content.split("\n");
-    const existing = widget.richLines ?? [];
+    const widgetContent = typeof widget.content === "string" ? widget.content : "";
+    const textLines = widgetContent.split("\n");
+    const existing = Array.isArray(widget.richLines) ? widget.richLines : [];
 
     return textLines.map((text, index) => {
       const current = existing[index];
-      if (current) return { ...current, text };
+      if (current && typeof current === "object") return { ...current, id: current.id ?? newId(), text };
 
       const numberedMatch = text.match(/^\d+\.\s+(.*)$/);
       if (text.startsWith("## ")) {
@@ -688,7 +696,7 @@ function TextWidgetEditor({
 
   function getSelectedLineRange() {
     const textarea = textareaRef.current;
-    const content = widget.content;
+    const content = typeof widget.content === "string" ? widget.content : "";
     if (!textarea) return { start: 0, end: Math.max(0, content.split("\n").length - 1) };
 
     const selectionStart = textarea.selectionStart;
