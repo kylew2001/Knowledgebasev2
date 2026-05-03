@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { LockKeyhole, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import {
@@ -39,6 +39,8 @@ function parseSignInError(result: { error: string; lockoutMinutes?: number }): s
 
 export default function LoginForm() {
   const router = useRouter();
+  const usernameFormRef = useRef<HTMLFormElement>(null);
+  const passwordFormRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState<Step>("username");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -216,7 +218,7 @@ export default function LoginForm() {
       </div>
 
       {step === "username" && (
-        <form onSubmit={handleUsernameSubmit} className="space-y-4">
+        <form ref={usernameFormRef} onSubmit={handleUsernameSubmit} className="space-y-4">
           <label className="block">
             <span className="text-sm font-semibold text-slate-700">Username</span>
             <input
@@ -224,6 +226,12 @@ export default function LoginForm() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isPending) {
+                  e.preventDefault();
+                  usernameFormRef.current?.requestSubmit();
+                }
+              }}
               className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
             />
           </label>
@@ -239,7 +247,7 @@ export default function LoginForm() {
       )}
 
       {step === "password" && (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+        <form ref={passwordFormRef} onSubmit={handlePasswordSubmit} className="space-y-4">
           <button
             type="button"
             onClick={goBack}
@@ -259,6 +267,12 @@ export default function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isPending) {
+                    e.preventDefault();
+                    passwordFormRef.current?.requestSubmit();
+                  }
+                }}
                 className="focus-ring h-11 w-full rounded-lg border border-line px-3 pr-10"
               />
               <button
