@@ -591,22 +591,36 @@ export function KnowledgeBase({
     .filter((post): post is MockPost => Boolean(post))
     .slice(0, 6);
 
-  const level = selectedSubcategory ? 2 : selectedCategory ? 1 : 0;
+  const selectedCategoryTitle = selectedCategory?.title ?? selectedPost?.category ?? "Unknown category";
+  const level = selectedPost ? 2 : selectedSubcategory ? 2 : selectedCategory ? 1 : 0;
 
   const headerTitle =
     level === 2 ? selectedSubcategory!
-    : level === 1 ? selectedCategory!.title
+    : level === 1 ? selectedCategoryTitle
     : "IT support articles and runbooks";
 
-  if (selectedPost && selectedCategory) {
+  if (selectedPost) {
     return (
       <PostPage
         post={selectedPost}
         userRole={userRole as import("@/lib/auth").UserRole}
-        categoryTitle={selectedCategory.title}
+        categoryTitle={selectedCategoryTitle}
         onBack={() => setSelectedPost(null)}
         groups={groups}
         onSavePost={(title, widgets, visibility) => handleSavePost(selectedPost.id, title, widgets, visibility)}
+        debugInfo={{
+          selectedPostId: selectedPost.id,
+          selectedPostTitle: selectedPost.title,
+          selectedPostCategory: selectedPost.category,
+          selectedPostSubcategory: selectedPost.subcategory,
+          selectedCategoryTitle: selectedCategory?.title ?? null,
+          selectedSubcategory,
+          categoryMatched: Boolean(selectedCategory),
+          knownCategoryTitles: categories.map((category) => category.title),
+          widgetCount: selectedPost.widgets?.length ?? 0,
+          widgetTypes: selectedPost.widgets?.map((widget) => widget.type) ?? [],
+          hasVisibility: Boolean(selectedPost.visibility)
+        }}
       />
     );
   }
@@ -617,7 +631,7 @@ export function KnowledgeBase({
         <div>
           {level > 0 && (
             <p className="mb-1 text-sm font-semibold text-slate-400">
-              Knowledge Base{level > 1 && <> · <span className="text-slate-500">{selectedCategory!.title}</span></>}
+              Knowledge Base{level > 1 && <> · <span className="text-slate-500">{selectedCategoryTitle}</span></>}
             </p>
           )}
           <p className="text-sm font-semibold text-brand">Knowledge Base</p>

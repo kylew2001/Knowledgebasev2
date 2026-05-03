@@ -1456,6 +1456,7 @@ type Props = {
   onSavePost?: (title: string, widgets: Widget[], visibility: VisibilityRule) => void;
   sharedView?: boolean;
   shareExpiresAt?: string;
+  debugInfo?: Record<string, unknown>;
 };
 
 const typeConfig = {
@@ -1487,7 +1488,8 @@ export function PostPage({
   groups,
   onSavePost,
   sharedView = false,
-  shareExpiresAt
+  shareExpiresAt,
+  debugInfo
 }: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const [editing, setEditing] = useState(false);
@@ -1721,6 +1723,15 @@ export function PostPage({
           )}
         </div>
       </header>
+
+      {!sharedView && debugInfo && (
+        <details className="print-hidden rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <summary className="cursor-pointer font-bold">Post debug info</summary>
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-white/80 p-3 text-xs">
+            {JSON.stringify(debugInfo, null, 2)}
+          </pre>
+        </details>
+      )}
 
       {showShare && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
