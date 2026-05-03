@@ -28,9 +28,12 @@ import {
   type SecuritySettings,
   type AuditLog,
   type SharedPostLink,
+  type AccountChangeRequest,
   type StorageStats,
+  approveAccountChangeRequest,
   createGroup,
   deleteGroup,
+  denyAccountChangeRequest,
   updateUser,
   updateUserRole,
   toggleUserDisabled,
@@ -54,6 +57,7 @@ type Props = {
   auditTotal: number;
   storageStats: StorageStats;
   sharedLinks: SharedPostLink[];
+  accountRequests: AccountChangeRequest[];
 };
 
 type GroupForm = {
@@ -85,6 +89,12 @@ function formatShareExpiry(expiresAt: string) {
   return new Date(expiresAt).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatRequestType(type: AccountChangeRequest["request_type"]) {
+  if (type === "email_change") return "Email change";
+  if (type === "two_fa_reset") return "2FA reset";
+  return "Password reset";
+}
+
 export function AdminDashboard({
   users: initialUsers,
   groups: initialGroups,
@@ -92,11 +102,13 @@ export function AdminDashboard({
   auditLogs,
   auditTotal,
   storageStats,
-  sharedLinks: initialSharedLinks
+  sharedLinks: initialSharedLinks,
+  accountRequests: initialAccountRequests
 }: Props) {
   const [users, setUsers] = useState(initialUsers);
   const [groups, setGroups] = useState(initialGroups);
   const [sharedLinks, setSharedLinks] = useState(initialSharedLinks);
+  const [accountRequests, setAccountRequests] = useState(initialAccountRequests);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [showNewUser, setShowNewUser] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
@@ -112,6 +124,9 @@ export function AdminDashboard({
   const [groupPending, startGroupTransition] = useTransition();
   const [sharePendingId, setSharePendingId] = useState<string | null>(null);
   const [, startShareTransition] = useTransition();
+  const [requestPendingId, setRequestPendingId] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [, startRequestTransition] = useTransition();
 
   // Role select state
   const [userRoles, setUserRoles] = useState<Record<string, string>>(
@@ -344,11 +359,55 @@ export function AdminDashboard({
     });
   }
 
+  function handleApproveRequest(request: AccountChangeRequest) {
+    setRequestError(null);
+    setRequestPendingId(request.id);
+    startRequestTransition(async () => {
+      const result = await approveAccountChangeRequest(request.id);
+      setRequestPendingId(null);
+      if (result.error) {
+        setRequestError(result.error);
+        return;
+      }
+      setAccountRequests((prev) =>
+        prev.map((item) =>
+          item.id === request.id
+            ? { ...item, status: "approved", reviewed_at: new Date().toISOString(), admin_reason: null }
+            : item
+        )
+      );
+    });
+  }
+
+  function handleDenyRequest(request: AccountChangeRequest) {
+    const reason = window.prompt("Enter the denial reason that the user will see:");
+    if (reason === null) return;
+
+    setRequestError(null);
+    setRequestPendingId(request.id);
+    startRequestTransition(async () => {
+      const result = await denyAccountChangeRequest(request.id, reason);
+      setRequestPendingId(null);
+      if (result.error) {
+        setRequestError(result.error);
+        return;
+      }
+      setAccountRequests((prev) =>
+        prev.map((item) =>
+          item.id === request.id
+            ? { ...item, status: "denied", reviewed_at: new Date().toISOString(), admin_reason: reason.trim() }
+            : item
+        )
+      );
+    });
+  }
+
   const lockedCount = Object.values(localDisabled).filter(Boolean).length;
   const sortedGroups = [...groups].sort((a, b) => a.name.localeCompare(b.name));
   const rootGroups = sortedGroups.filter((group) => !group.parent_id);
   const childGroups = sortedGroups.filter((group) => group.parent_id);
   const parentOptions = sortedGroups.filter((group) => !isInvalidParentOption(group.id));
+  const pendingAccountRequests = accountRequests.filter((request) => request.status === "pending").length;
 
   function renderGroup(group: AdminGroup, depth = 0) {
     const children = childGroups.filter((child) => child.parent_id === group.id);
@@ -428,6 +487,92 @@ export function AdminDashboard({
             </div>
           );
         })}
+      </section>
+
+      <section className="rounded-lg border border-line bg-white p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-ink">Account change requests</h3>
+            <p className="text-sm text-slate-500">Approve email changes, 2FA resets, and forgot-password requests.</p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+            <KeyRound className="h-4 w-4" />
+            {pendingAccountRequests} pending
+          </span>
+        </div>
+        {requestError && <p className="mb-3 text-sm text-red-600">{requestError}</p>}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-500">
+                <th className="border-b border-line px-3 py-2">User</th>
+                <th className="border-b border-line px-3 py-2">Request</th>
+                <th className="border-b border-line px-3 py-2">Proposed change</th>
+                <th className="border-b border-line px-3 py-2">Created</th>
+                <th className="border-b border-line px-3 py-2">Status</th>
+                <th className="border-b border-line px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accountRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
+                    No account change requests yet.
+                  </td>
+                </tr>
+              ) : (
+                accountRequests.map((request) => (
+                  <tr key={request.id}>
+                    <td className="border-b border-line px-3 py-3">
+                      <p className="font-semibold text-ink">{request.display_name || request.username || "Unknown user"}</p>
+                      {request.email && <p className="text-slate-500">{request.email}</p>}
+                      {request.username && <p className="text-xs text-slate-400">@{request.username}</p>}
+                    </td>
+                    <td className="border-b border-line px-3 py-3 font-semibold text-ink">{formatRequestType(request.request_type)}</td>
+                    <td className="border-b border-line px-3 py-3 text-slate-600">
+                      {request.proposed_value || (request.request_type === "two_fa_reset" ? "Reset authenticator setup" : "Allow password reset")}
+                      {request.admin_reason && <p className="mt-1 text-xs text-slate-500">Reason: {request.admin_reason}</p>}
+                    </td>
+                    <td className="border-b border-line px-3 py-3 text-slate-600">
+                      {new Date(request.created_at).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" })}
+                    </td>
+                    <td className="border-b border-line px-3 py-3">
+                      <span className={`rounded-md px-2 py-1 text-xs font-bold ${
+                        request.status === "approved"
+                          ? "bg-teal-50 text-teal-800"
+                          : request.status === "denied"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-amber-50 text-amber-800"
+                      }`}>
+                        {request.status}
+                      </span>
+                    </td>
+                    <td className="border-b border-line px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={request.status !== "pending" || requestPendingId === request.id}
+                          onClick={() => handleApproveRequest(request)}
+                          className="focus-ring rounded-lg border border-line px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-white"
+                        >
+                          {requestPendingId === request.id ? "Working..." : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={request.status !== "pending" || requestPendingId === request.id}
+                          onClick={() => handleDenyRequest(request)}
+                          className="focus-ring rounded-lg border border-line px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-white"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_420px]">

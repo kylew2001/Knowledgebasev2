@@ -96,6 +96,40 @@ export async function checkUsername(
   return { found: true, requiresPasswordSet: row.force_password_change };
 }
 
+export async function requestForgotPasswordReset(username: string): Promise<{ error?: string }> {
+  const normalizedUsername = username.toLowerCase().trim();
+  if (!normalizedUsername) return { error: "Enter your username." };
+
+  const row = await lookupByUsername(normalizedUsername);
+  if (!row) {
+    // Do not reveal whether a username exists from the forgot-password flow.
+    return {};
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("account_change_requests")
+    .select("id")
+    .eq("request_type", "password_reset")
+    .eq("status", "pending")
+    .or(`user_id.eq.${row.user_id},username.eq.${normalizedUsername}`)
+    .maybeSingle();
+
+  if (existing) return {};
+
+  const { error } = await admin.from("account_change_requests").insert({
+    user_id: row.user_id,
+    username: normalizedUsername,
+    request_type: "password_reset",
+    proposed_value: "Forgot password reset"
+  });
+
+  if (error) return { error: "Could not submit password reset request." };
+
+  await writeAuditLog(admin, row.user_id, "account_change_requested", "Forgot password reset requested", "profiles", row.user_id);
+  return {};
+}
+
 export async function signInWithUsername(
   username: string,
   password: string
@@ -114,7 +148,7 @@ export async function signInWithUsername(
     admin
       .from("profiles")
       .select(
-        "failed_login_count, locked_until, disabled_at, email_2fa_enabled, role, totp_setup_required"
+        "failed_login_count, locked_until, disabled_at, role, totp_setup_required"
       )
       .eq("id", row.user_id)
       .single(),
@@ -176,17 +210,6 @@ export async function signInWithUsername(
 
   if (totpFactor) {
     return { mfaRequired: "totp" as const, factorId: totpFactor.id, userId: row.user_id };
-  }
-
-  if (profile?.email_2fa_enabled) {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-    await admin
-      .from("profiles")
-      .update({ otp_code: code, otp_expires_at: expiresAt })
-      .eq("id", row.user_id);
-    await sendOtpEmail(row.email, code);
-    return { mfaRequired: "email" as const, userId: row.user_id };
   }
 
   redirect("/knowledge-base");

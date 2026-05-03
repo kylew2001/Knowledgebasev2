@@ -6,6 +6,7 @@ import { LockKeyhole, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import {
   checkUsername,
   completeMfaVerification,
+  requestForgotPasswordReset,
   signInWithUsername,
   setInitialPassword,
   verifyEmailOtp,
@@ -13,7 +14,7 @@ import {
 } from "@/app/auth/actions";
 import { createClient } from "@/lib/supabase/client";
 
-type Step = "username" | "password" | "set-password" | "totp" | "email-otp";
+type Step = "username" | "password" | "set-password" | "totp" | "email-otp" | "forgot-password";
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -41,6 +42,7 @@ export default function LoginForm() {
   const router = useRouter();
   const usernameFormRef = useRef<HTMLFormElement>(null);
   const passwordFormRef = useRef<HTMLFormElement>(null);
+  const forgotPasswordFormRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState<Step>("username");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +57,7 @@ export default function LoginForm() {
   const [totpCode, setTotpCode] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const normalizedUsername = username.trim().toLowerCase();
 
   // Countdown timer for email OTP resend
@@ -86,6 +89,7 @@ export default function LoginForm() {
     setOtpCode("");
     setMfaFactorId(null);
     setUserId(null);
+    setForgotSubmitted(false);
   }
 
   function handleUsernameSubmit(e: React.FormEvent) {
@@ -123,6 +127,21 @@ export default function LoginForm() {
       if (result.error) {
         setError(parseSignInError(result));
       }
+    });
+  }
+
+  function handleForgotPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!normalizedUsername || isPending) return;
+    setError(null);
+    setForgotSubmitted(false);
+    startTransition(async () => {
+      const result = await requestForgotPasswordReset(normalizedUsername);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setForgotSubmitted(true);
     });
   }
 
@@ -243,6 +262,17 @@ export default function LoginForm() {
           >
             {isPending ? "Checking…" : "Next"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setForgotSubmitted(false);
+              setStep("forgot-password");
+            }}
+            className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+          >
+            Forgot password?
+          </button>
         </form>
       )}
 
@@ -301,6 +331,65 @@ export default function LoginForm() {
             className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
           >
             {isPending ? "Signing in…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setForgotSubmitted(false);
+              setStep("forgot-password");
+            }}
+            className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+          >
+            Forgot password?
+          </button>
+        </form>
+      )}
+
+      {step === "forgot-password" && (
+        <form ref={forgotPasswordFormRef} onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+          <button
+            type="button"
+            onClick={goBack}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to sign in</span>
+          </button>
+          <div>
+            <p className="text-sm font-semibold text-slate-700">Forgot password</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter your username and an admin will review the reset request.
+            </p>
+          </div>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Username</span>
+            <input
+              autoFocus
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isPending) {
+                  e.preventDefault();
+                  forgotPasswordFormRef.current?.requestSubmit();
+                }
+              }}
+              className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3"
+            />
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {forgotSubmitted && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Request sent. If the username exists, an admin can approve the reset from the admin dashboard.
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={isPending || !normalizedUsername}
+            className="focus-ring h-11 w-full rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800 disabled:opacity-50"
+          >
+            {isPending ? "Sending request…" : "Request password reset"}
           </button>
         </form>
       )}

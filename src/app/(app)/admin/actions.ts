@@ -49,6 +49,20 @@ export type SharedPostLink = {
   revoked_at: string | null;
 };
 
+export type AccountChangeRequest = {
+  id: string;
+  user_id: string | null;
+  username: string | null;
+  display_name: string | null;
+  email: string | null;
+  request_type: "email_change" | "two_fa_reset" | "password_reset";
+  proposed_value: string | null;
+  status: "pending" | "approved" | "denied";
+  admin_reason: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+};
+
 export type AdminGroup = {
   id: string;
   parent_id: string | null;
@@ -600,4 +614,180 @@ export async function revokeSharedPostLink(shareId: string) {
 
   await writeAuditLog(admin, current.profile.id, "post_share_revoked", share?.post_id ?? shareId);
   return null;
+}
+
+export async function listAccountChangeRequests(): Promise<AccountChangeRequest[]> {
+  await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("account_change_requests")
+    .select(`
+      id,
+      user_id,
+      username,
+      request_type,
+      proposed_value,
+      status,
+      admin_reason,
+      created_at,
+      reviewed_at,
+      profiles!account_change_requests_user_id_fkey(display_name, username)
+    `)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error || !data) return [];
+
+  const authUsers = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const emailMap = new Map((authUsers.data?.users ?? []).map((user) => [user.id, user.email ?? null]));
+
+  return data.map((row) => {
+    const typed = row as unknown as {
+      id: string;
+      user_id: string | null;
+      username: string | null;
+      request_type: AccountChangeRequest["request_type"];
+      proposed_value: string | null;
+      status: AccountChangeRequest["status"];
+      admin_reason: string | null;
+      created_at: string;
+      reviewed_at: string | null;
+      profiles: { display_name: string | null; username: string | null } | null;
+    };
+
+    return {
+      id: typed.id,
+      user_id: typed.user_id,
+      username: typed.profiles?.username ?? typed.username,
+      display_name: typed.profiles?.display_name ?? null,
+      email: typed.user_id ? emailMap.get(typed.user_id) ?? null : null,
+      request_type: typed.request_type,
+      proposed_value: typed.proposed_value,
+      status: typed.status,
+      admin_reason: typed.admin_reason,
+      created_at: typed.created_at,
+      reviewed_at: typed.reviewed_at
+    };
+  });
+}
+
+async function resolveRequestTarget(
+  admin: ReturnType<typeof createAdminClient>,
+  request: { user_id: string | null; username: string | null }
+) {
+  if (request.user_id) return request.user_id;
+  if (!request.username) return null;
+
+  const { data } = await admin
+    .rpc("lookup_user_by_username", { p_username: request.username.toLowerCase().trim() })
+    .maybeSingle();
+
+  return (data as { user_id?: string } | null)?.user_id ?? null;
+}
+
+export async function approveAccountChangeRequest(requestId: string): Promise<{ error?: string }> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+
+  const { data: request, error: requestError } = await admin
+    .from("account_change_requests")
+    .select("id, user_id, username, request_type, proposed_value, status")
+    .eq("id", requestId)
+    .single();
+
+  if (requestError || !request) return { error: "Request not found." };
+  if (request.status !== "pending") return { error: "Request has already been reviewed." };
+
+  const userId = await resolveRequestTarget(admin, request);
+  if (!userId) return { error: "Could not find the target user." };
+
+  if (request.request_type === "email_change") {
+    if (!request.proposed_value) return { error: "No proposed email was supplied." };
+    const { error } = await admin.auth.admin.updateUserById(userId, { email: request.proposed_value });
+    if (error) return { error: error.message };
+  }
+
+  if (request.request_type === "two_fa_reset") {
+    const { data: factorsData, error: factorsError } = await admin.auth.admin.mfa.listFactors({ userId });
+    if (factorsError) return { error: factorsError.message };
+
+    const factors = normalizeMfaFactors(factorsData as MfaFactorsResponse);
+    for (const factor of factors.filter((item) => item.factor_type === "totp")) {
+      const { error } = await admin.auth.admin.mfa.deleteFactor({ id: factor.id, userId });
+      if (error) return { error: error.message };
+    }
+
+    const { error } = await admin
+      .from("profiles")
+      .update({ totp_setup_required: true })
+      .eq("id", userId);
+    if (error) return { error: error.message };
+  }
+
+  if (request.request_type === "password_reset") {
+    const { error } = await admin
+      .from("profiles")
+      .update({ force_password_change: true })
+      .eq("id", userId);
+    if (error) return { error: error.message };
+  }
+
+  const { error } = await admin
+    .from("account_change_requests")
+    .update({
+      user_id: userId,
+      status: "approved",
+      reviewed_by: current.profile.id,
+      reviewed_at: new Date().toISOString(),
+      admin_reason: null
+    })
+    .eq("id", requestId);
+
+  if (error) return { error: error.message };
+
+  await writeAuditLog(admin, current.profile.id, "account_change_approved", request.request_type, "profiles", userId);
+  return {};
+}
+
+export async function denyAccountChangeRequest(
+  requestId: string,
+  reason: string
+): Promise<{ error?: string }> {
+  const current = await guardAdmin();
+  const admin = createAdminClient();
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) return { error: "A denial reason is required." };
+
+  const { data: request } = await admin
+    .from("account_change_requests")
+    .select("id, user_id, username, request_type, status")
+    .eq("id", requestId)
+    .single();
+
+  if (!request) return { error: "Request not found." };
+  if (request.status !== "pending") return { error: "Request has already been reviewed." };
+
+  const { error } = await admin
+    .from("account_change_requests")
+    .update({
+      status: "denied",
+      admin_reason: trimmedReason,
+      reviewed_by: current.profile.id,
+      reviewed_at: new Date().toISOString()
+    })
+    .eq("id", requestId);
+
+  if (error) return { error: error.message };
+
+  await writeAuditLog(
+    admin,
+    current.profile.id,
+    "account_change_denied",
+    `${request.request_type}: ${trimmedReason}`,
+    request.user_id ? "profiles" : undefined,
+    request.user_id ?? undefined
+  );
+  return {};
 }
