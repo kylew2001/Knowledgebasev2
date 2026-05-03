@@ -517,13 +517,13 @@ export function KnowledgeBase({
     void savePostToDatabase(post);
   }
 
-  function handleSavePost(postId: string, widgets: import("@/lib/post-content").Widget[], visibility: VisibilityRule) {
+  function handleSavePost(postId: string, title: string, widgets: import("@/lib/post-content").Widget[], visibility: VisibilityRule) {
     const nextType = getStoredPostType(widgets);
     setPosts((prev) => {
       let savedPost: MockPost | null = null;
       const nextPosts = prev.map((post) => {
         if (post.id !== postId) return post;
-        savedPost = { ...post, widgets, visibility, type: nextType };
+        savedPost = { ...post, title, widgets, visibility, type: nextType };
         return savedPost;
       });
 
@@ -532,7 +532,7 @@ export function KnowledgeBase({
     });
     setSelectedPost((current) =>
       current?.id === postId
-        ? { ...current, widgets, visibility, type: nextType }
+        ? { ...current, title, widgets, visibility, type: nextType }
         : current
     );
   }
@@ -606,7 +606,7 @@ export function KnowledgeBase({
         categoryTitle={selectedCategory.title}
         onBack={() => setSelectedPost(null)}
         groups={groups}
-        onSavePost={(widgets, visibility) => handleSavePost(selectedPost.id, widgets, visibility)}
+        onSavePost={(title, widgets, visibility) => handleSavePost(selectedPost.id, title, widgets, visibility)}
       />
     );
   }

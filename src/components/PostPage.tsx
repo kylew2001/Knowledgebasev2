@@ -1249,7 +1249,7 @@ type Props = {
   onBack?: () => void;
   categoryTitle: string;
   groups: VisibilityGroup[];
-  onSavePost?: (widgets: Widget[], visibility: VisibilityRule) => void;
+  onSavePost?: (title: string, widgets: Widget[], visibility: VisibilityRule) => void;
   sharedView?: boolean;
   shareExpiresAt?: string;
 };
@@ -1287,6 +1287,8 @@ export function PostPage({
 }: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(post.title);
+  const [draftTitle, setDraftTitle] = useState(post.title);
   const [widgets, setWidgets] = useState<Widget[]>(post.widgets ?? defaultContent[post.id] ?? []);
   const [draft, setDraft] = useState<Widget[]>(widgets);
   const [visibility, setVisibility] = useState<VisibilityRule>(post.visibility ?? { mode: "everyone", groupIds: [] });
@@ -1307,21 +1309,29 @@ export function PostPage({
   }, [shareExpiresAt]);
 
   function startEdit() {
+    setDraftTitle(title);
     setDraft(widgets);
     setDraftVisibility(visibility);
     setEditing(true);
   }
   function cancelEdit() { setEditing(false); }
   function saveEdit() {
+    const nextTitle = draftTitle.trim();
+    if (!nextTitle) {
+      window.alert("Post title is required.");
+      return;
+    }
+
+    setTitle(nextTitle);
     setWidgets(draft);
     setVisibility(draftVisibility);
-    onSavePost?.(draft, draftVisibility);
+    onSavePost?.(nextTitle, draft, draftVisibility);
     setEditing(false);
   }
 
   function exportPdf() {
     const previousTitle = document.title;
-    const filename = `${post.title || "Knowledge base post"} - ${formatDate(post.publishedAt)}`;
+    const filename = `${title || "Knowledge base post"} - ${formatDate(post.publishedAt)}`;
     document.title = filename;
     window.print();
     window.setTimeout(() => {
@@ -1452,7 +1462,19 @@ export function PostPage({
               <span>{post.subcategory}</span>
             </div>
           )}
-          <h2 className="text-2xl font-bold text-ink">{post.title || "Untitled post"}</h2>
+          {editing ? (
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Post title</span>
+              <input
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                className="focus-ring mt-2 h-11 w-full rounded-lg border border-line px-3 text-xl font-bold text-ink"
+                placeholder="Post title"
+              />
+            </label>
+          ) : (
+            <h2 className="text-2xl font-bold text-ink">{title || "Untitled post"}</h2>
+          )}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <span className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${cfg.bg} ${cfg.fg}`}>
               <TypeIcon className="h-3.5 w-3.5" />
