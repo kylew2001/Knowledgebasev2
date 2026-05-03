@@ -62,11 +62,26 @@ textarea {
   }
 
   .post-print-root {
-    position: absolute;
-    inset: 0;
-    width: 100%;
+    position: static !important;
+    width: auto !important;
     background: #ffffff !important;
     color: #17202a !important;
+  }
+
+  .app-shell-root,
+  .app-shell-main,
+  .app-shell-inner {
+    display: block !important;
+    width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .app-shell-sidebar,
+  .app-shell-mobile-header {
+    display: none !important;
   }
 
   .post-print-header,
@@ -99,10 +114,22 @@ textarea {
 
   img,
   figure,
-  pre,
   table,
   blockquote {
     break-inside: avoid;
+  }
+
+  pre,
+  code {
+    overflow: visible !important;
+    white-space: pre-wrap !important;
+    word-break: break-word;
+  }
+
+  p,
+  li {
+    orphans: 3;
+    widows: 3;
   }
 
   img {

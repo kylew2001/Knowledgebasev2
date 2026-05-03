@@ -30,8 +30,8 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
   }
 
   return (
-    <div className="min-h-screen lg:flex">
-      <header className="sticky top-0 z-40 border-b border-line bg-white/95 px-3 py-2 backdrop-blur lg:hidden">
+    <div className="app-shell-root min-h-screen lg:flex">
+      <header className="app-shell-mobile-header sticky top-0 z-40 border-b border-line bg-white/95 px-3 py-2 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-2">
           <Link
             href="/knowledge-base"
@@ -75,7 +75,7 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
           </div>
         </div>
       </header>
-      <aside className="hidden w-72 shrink-0 border-r border-line bg-white/88 px-5 py-6 lg:block">
+      <aside className="app-shell-sidebar hidden w-72 shrink-0 border-r border-line bg-white/88 px-5 py-6 lg:block">
         <div className="mb-9">
           <p className="text-sm font-semibold text-brand">IT Support</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal text-ink">
@@ -115,8 +115,8 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
           </button>
         </form>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl">{children}</div>
+      <main className="app-shell-main min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
+        <div className="app-shell-inner mx-auto max-w-7xl">{children}</div>
       </main>
       <InactivityGuard timeoutMinutes={inactivityTimeout} />
     </div>
