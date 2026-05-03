@@ -96,8 +96,8 @@ function getPostSearchText(post: MockPost) {
     .map((widget) => {
       if (widget.type === "text" || widget.type === "callout") return widget.content;
       if (widget.type === "code") return `${widget.language} ${widget.filename ?? ""} ${widget.content}`;
-      if (widget.type === "steps") return `${widget.title ?? ""} ${widget.steps.map((step) => step.text).join(" ")}`;
-      if (widget.type === "checklist") return `${widget.title ?? ""} ${widget.items.map((item) => item.text).join(" ")}`;
+      if (widget.type === "steps") return `${widget.title ?? ""} ${widget.steps.map((step) => `${step.text} ${(step.subpoints ?? []).map((subpoint) => subpoint.text).join(" ")}`).join(" ")}`;
+      if (widget.type === "checklist") return `${widget.title ?? ""} ${widget.items.map((item) => `${item.text} ${(item.subpoints ?? []).map((subpoint) => subpoint.text).join(" ")}`).join(" ")}`;
       if (widget.type === "table") return `${widget.title ?? ""} ${widget.columns.join(" ")} ${widget.rows.flat().join(" ")}`;
       if (widget.type === "quote") return `${widget.content} ${widget.source ?? ""}`;
       if (widget.type === "link") return `${widget.label} ${widget.url} ${widget.description ?? ""}`;

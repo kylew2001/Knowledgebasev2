@@ -40,17 +40,21 @@ export type CodeWidget = {
   filename?: string;
   content: string;
 };
+export type ChecklistSubpoint = { id: string; text: string; checked: boolean };
+export type ChecklistItem = { id: string; text: string; checked: boolean; subpoints?: ChecklistSubpoint[] };
 export type ChecklistWidget = {
   id: string;
   type: "checklist";
   title?: string;
-  items: { id: string; text: string; checked: boolean }[];
+  items: ChecklistItem[];
 };
+export type StepSubpoint = { id: string; text: string };
+export type StepItem = { id: string; text: string; subpoints?: StepSubpoint[] };
 export type StepsWidget = {
   id: string;
   type: "steps";
   title?: string;
-  steps: { id: string; text: string }[];
+  steps: StepItem[];
 };
 export type TableWidget = {
   id: string;

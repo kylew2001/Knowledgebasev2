@@ -76,8 +76,12 @@ type CalloutWidget = {
   icon?: string;
 };
 type CodeWidget    = { id: string; type: "code"; language: string; filename?: string; content: string };
-type ChecklistWidget = { id: string; type: "checklist"; title?: string; items: { id: string; text: string; checked: boolean }[] };
-type StepsWidget = { id: string; type: "steps"; title?: string; steps: { id: string; text: string }[] };
+type ChecklistSubpoint = { id: string; text: string; checked: boolean };
+type ChecklistItem = { id: string; text: string; checked: boolean; subpoints?: ChecklistSubpoint[] };
+type ChecklistWidget = { id: string; type: "checklist"; title?: string; items: ChecklistItem[] };
+type StepSubpoint = { id: string; text: string };
+type StepItem = { id: string; text: string; subpoints?: StepSubpoint[] };
+type StepsWidget = { id: string; type: "steps"; title?: string; steps: StepItem[] };
 type TableWidget = { id: string; type: "table"; title?: string; columns: string[]; rows: string[][] };
 type QuoteWidget = { id: string; type: "quote"; content: string; source?: string };
 type LinkWidget = { id: string; type: "link"; label: string; url: string; description?: string };
@@ -1070,11 +1074,27 @@ function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
       {w.title && <h3 className="mb-3 text-sm font-bold text-ink">{w.title}</h3>}
       <ul className="space-y-2">
         {w.items.map((item) => (
-          <li key={item.id} className="flex items-start gap-2 text-sm text-slate-700">
-            <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${item.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
-              <Check className="h-3.5 w-3.5" />
-            </span>
-            <span className={item.checked ? "text-slate-500 line-through" : ""}>{item.text || "Checklist item"}</span>
+          <li key={item.id} className="text-sm text-slate-700">
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${item.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
+                <Check className="h-3.5 w-3.5" />
+              </span>
+              <span className={item.checked ? "text-slate-500 line-through" : ""}>{item.text || "Checklist item"}</span>
+            </div>
+            {(item.subpoints?.length ?? 0) > 0 && (
+              <ol className="ml-10 mt-2 space-y-1 pl-4" style={{ listStyleType: "lower-alpha" }}>
+                {item.subpoints?.map((subpoint) => (
+                  <li key={subpoint.id} className="pl-1">
+                    <div className="flex items-start gap-2">
+                      <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${subpoint.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
+                        <Check className="h-3 w-3" />
+                      </span>
+                      <span className={subpoint.checked ? "text-slate-500 line-through" : ""}>{subpoint.text || "Sub-point"}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </li>
         ))}
       </ul>
@@ -1092,7 +1112,16 @@ function StepsWidgetView({ w }: { w: StepsWidget }) {
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
               {index + 1}
             </span>
-            <p className="pt-1 text-sm leading-6 text-slate-700">{step.text || "Step instructions"}</p>
+            <div className="min-w-0 flex-1 pt-1">
+              <p className="text-sm leading-6 text-slate-700">{step.text || "Step instructions"}</p>
+              {(step.subpoints?.length ?? 0) > 0 && (
+                <ol className="mt-2 space-y-1 pl-5 text-sm leading-6 text-slate-600" style={{ listStyleType: "lower-alpha" }}>
+                  {step.subpoints?.map((subpoint) => (
+                    <li key={subpoint.id} className="pl-1">{subpoint.text || "Sub-point"}</li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </li>
         ))}
       </ol>
@@ -1119,6 +1148,41 @@ function ChecklistWidgetEditor({
     update({ items: widget.items.filter((item) => item.id !== itemId) });
   }
 
+  function addSubpoint(itemId: string) {
+    update({
+      items: widget.items.map((item) =>
+        item.id === itemId
+          ? { ...item, subpoints: [...(item.subpoints ?? []), { id: newId(), text: "", checked: false }] }
+          : item
+      )
+    });
+  }
+
+  function updateSubpoint(itemId: string, subpointId: string, patch: Partial<ChecklistSubpoint>) {
+    update({
+      items: widget.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              subpoints: (item.subpoints ?? []).map((subpoint) =>
+                subpoint.id === subpointId ? { ...subpoint, ...patch } : subpoint
+              )
+            }
+          : item
+      )
+    });
+  }
+
+  function removeSubpoint(itemId: string, subpointId: string) {
+    update({
+      items: widget.items.map((item) =>
+        item.id === itemId
+          ? { ...item, subpoints: (item.subpoints ?? []).filter((subpoint) => subpoint.id !== subpointId) }
+          : item
+      )
+    });
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
       <input
@@ -1129,21 +1193,50 @@ function ChecklistWidgetEditor({
       />
       <div className="space-y-2">
         {widget.items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={item.checked}
-              onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
-              className="h-4 w-4 rounded border-line"
-            />
-            <input
-              value={item.text}
-              onChange={(e) => updateItem(item.id, { text: e.target.value })}
-              placeholder="Checklist item"
-              className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
-            />
-            <button type="button" onClick={() => removeItem(item.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
-              <X className="h-4 w-4" />
+          <div key={item.id} className="space-y-2 rounded-lg border border-line bg-white/60 p-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={item.checked}
+                onChange={(e) => updateItem(item.id, { checked: e.target.checked })}
+                className="h-4 w-4 rounded border-line"
+              />
+              <input
+                value={item.text}
+                onChange={(e) => updateItem(item.id, { text: e.target.value })}
+                placeholder="Checklist item"
+                className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+              />
+              <button type="button" onClick={() => removeItem(item.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {(item.subpoints ?? []).map((subpoint, subpointIndex) => (
+              <div key={subpoint.id} className="ml-6 flex items-center gap-2">
+                <span className="w-5 shrink-0 text-xs font-semibold text-slate-500">{String.fromCharCode(97 + subpointIndex)}.</span>
+                <input
+                  type="checkbox"
+                  checked={subpoint.checked}
+                  onChange={(e) => updateSubpoint(item.id, subpoint.id, { checked: e.target.checked })}
+                  className="h-4 w-4 rounded border-line"
+                />
+                <input
+                  value={subpoint.text}
+                  onChange={(e) => updateSubpoint(item.id, subpoint.id, { text: e.target.value })}
+                  placeholder="Sub-point"
+                  className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+                />
+                <button type="button" onClick={() => removeSubpoint(item.id, subpoint.id)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => addSubpoint(item.id)}
+              className="focus-ring ml-6 inline-flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-mist"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add sub-point
             </button>
           </div>
         ))}
@@ -1178,6 +1271,41 @@ function StepsWidgetEditor({
     update({ steps: widget.steps.filter((step) => step.id !== stepId) });
   }
 
+  function addSubpoint(stepId: string) {
+    update({
+      steps: widget.steps.map((step) =>
+        step.id === stepId
+          ? { ...step, subpoints: [...(step.subpoints ?? []), { id: newId(), text: "" }] }
+          : step
+      )
+    });
+  }
+
+  function updateSubpoint(stepId: string, subpointId: string, text: string) {
+    update({
+      steps: widget.steps.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              subpoints: (step.subpoints ?? []).map((subpoint) =>
+                subpoint.id === subpointId ? { ...subpoint, text } : subpoint
+              )
+            }
+          : step
+      )
+    });
+  }
+
+  function removeSubpoint(stepId: string, subpointId: string) {
+    update({
+      steps: widget.steps.map((step) =>
+        step.id === stepId
+          ? { ...step, subpoints: (step.subpoints ?? []).filter((subpoint) => subpoint.id !== subpointId) }
+          : step
+      )
+    });
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-line bg-panel p-3">
       <input
@@ -1188,18 +1316,41 @@ function StepsWidgetEditor({
       />
       <div className="space-y-2">
         {widget.steps.map((step, index) => (
-          <div key={step.id} className="flex items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-              {index + 1}
-            </span>
-            <input
-              value={step.text}
-              onChange={(e) => updateStep(step.id, e.target.value)}
-              placeholder="Step instructions"
-              className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
-            />
-            <button type="button" onClick={() => removeStep(step.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
-              <X className="h-4 w-4" />
+          <div key={step.id} className="space-y-2 rounded-lg border border-line bg-white/60 p-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+                {index + 1}
+              </span>
+              <input
+                value={step.text}
+                onChange={(e) => updateStep(step.id, e.target.value)}
+                placeholder="Step instructions"
+                className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+              />
+              <button type="button" onClick={() => removeStep(step.id)} className="focus-ring flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {(step.subpoints ?? []).map((subpoint, subpointIndex) => (
+              <div key={subpoint.id} className="ml-10 flex items-center gap-2">
+                <span className="w-5 shrink-0 text-xs font-semibold text-slate-500">{String.fromCharCode(97 + subpointIndex)}.</span>
+                <input
+                  value={subpoint.text}
+                  onChange={(e) => updateSubpoint(step.id, subpoint.id, e.target.value)}
+                  placeholder="Sub-point"
+                  className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
+                />
+                <button type="button" onClick={() => removeSubpoint(step.id, subpoint.id)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-red-500">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => addSubpoint(step.id)}
+              className="focus-ring ml-10 inline-flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-mist"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add sub-point
             </button>
           </div>
         ))}
