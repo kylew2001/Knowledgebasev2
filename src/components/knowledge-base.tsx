@@ -80,16 +80,6 @@ function loadStoredPosts() {
   }
 }
 
-function saveStoredPosts(posts: MockPost[]) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(POST_STORAGE_KEY, JSON.stringify(posts));
-  } catch {
-    // Saving should never block editing if browser storage is unavailable.
-  }
-}
-
 function mergePostsWithSeedData(databasePosts: MockPost[]) {
   if (!databasePosts.length) return mockPosts;
 
@@ -382,7 +372,6 @@ export function KnowledgeBase({
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [posts, setPosts] = useState<MockPost[]>(() => mergePostsWithSeedData(initialPosts));
   const [postUserState, setPostUserState] = useState<LocalPostUserState>(() => getInitialPostUserState(initialPostUserState));
-  const [postsHydrated, setPostsHydrated] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<MockPost | null>(null);
@@ -406,17 +395,13 @@ export function KnowledgeBase({
     if (storedPosts && canEdit && !alreadyMigrated) {
       setPosts(storedPosts);
       void savePostsToDatabase(storedPosts).then((result) => {
-        if (result.ok) window.localStorage.setItem(POST_DB_MIGRATION_KEY, "true");
+        if (result.ok) {
+          window.localStorage.setItem(POST_DB_MIGRATION_KEY, "true");
+          window.localStorage.removeItem(POST_STORAGE_KEY);
+        }
       });
     }
-
-    setPostsHydrated(true);
   }, [canEdit]);
-
-  useEffect(() => {
-    if (!postsHydrated) return;
-    saveStoredPosts(posts);
-  }, [posts, postsHydrated]);
 
   function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); setSearch(""); }
   function goCategory(cat: Category) { setSelectedCategory(cat); setSelectedSubcategory(null); setSelectedPost(null); }

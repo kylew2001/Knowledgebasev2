@@ -1,8 +1,9 @@
 "use server";
 
+import { createHash, randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, isSuperAdmin } from "@/lib/auth";
-import { sendInviteEmail, sendResendTestEmail } from "@/lib/email";
+import { sendInviteEmail, sendPasswordResetEmail, sendResendTestEmail } from "@/lib/email";
 import { redirect } from "next/navigation";
 
 export type AdminUser = {
@@ -83,6 +84,10 @@ type MfaFactorsResponse = {
   totp?: MfaFactor[];
   phone?: MfaFactor[];
 } | null;
+
+function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 function normalizeMfaFactors(data: MfaFactorsResponse): MfaFactor[] {
   return [...(data?.factors ?? []), ...(data?.totp ?? []), ...(data?.phone ?? [])];
@@ -376,11 +381,13 @@ export async function sendPasswordReset(userId: string): Promise<{ error: string
   const current = await guardAdmin();
   const admin = createAdminClient();
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("display_name, username")
-    .eq("id", userId)
-    .single();
+  const [{ data: profile }, { data: authUser }] = await Promise.all([
+    admin.from("profiles").select("display_name, username").eq("id", userId).single(),
+    admin.auth.admin.getUserById(userId)
+  ]);
+
+  const email = authUser.user?.email;
+  if (!email) return { error: "User is missing an email address." };
 
   const { error } = await admin
     .from("profiles")
@@ -388,6 +395,25 @@ export async function sendPasswordReset(userId: string): Promise<{ error: string
     .eq("id", userId);
 
   if (error) return { error: error.message };
+
+  const resetToken = randomBytes(32).toString("base64url");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+  const resetUrl = `${appUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
+  const { error: tokenError } = await admin.from("password_reset_tokens").insert({
+    user_id: userId,
+    token_hash: hashResetToken(resetToken),
+    reason: "admin_password_reset",
+    created_by: current.profile.id,
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  if (tokenError) return { error: tokenError.message };
+
+  try {
+    await sendPasswordResetEmail(email, resetUrl);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send password reset email" };
+  }
 
   const displayName = profile?.display_name ?? profile?.username ?? userId;
   await writeAuditLog(admin, current.profile.id, "password_reset", displayName, "profiles", userId);
@@ -414,9 +440,21 @@ export async function resendUserInvite(userId: string): Promise<{ error: string 
     return { error: "User is missing an email address or username." };
   }
 
+  const setupToken = randomBytes(32).toString("base64url");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+  const setupUrl = `${appUrl.replace(/\/$/, "")}/reset-password/${setupToken}`;
+  const { error: tokenError } = await admin.from("password_reset_tokens").insert({
+    user_id: userId,
+    token_hash: hashResetToken(setupToken),
+    reason: "invite_resend",
+    created_by: current.profile.id,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  if (tokenError) return { error: tokenError.message };
+
   try {
-    await sendInviteEmail(email, username, appUrl);
+    await sendInviteEmail(email, username, setupUrl);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Failed to send invite email" };
   }
@@ -726,11 +764,37 @@ export async function approveAccountChangeRequest(requestId: string): Promise<{ 
   }
 
   if (request.request_type === "password_reset") {
+    const { data: authUser } = await admin.auth.admin.getUserById(userId);
+    const email = authUser.user?.email;
+    if (!email) return { error: "User is missing an email address." };
+
+    const resetToken = randomBytes(32).toString("base64url");
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+    const resetUrl = `${appUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
+    const { error: tokenError } = await admin.from("password_reset_tokens").insert({
+      user_id: userId,
+      token_hash: hashResetToken(resetToken),
+      reason: "password_reset_request",
+      created_by: current.profile.id,
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+    if (tokenError) return { error: tokenError.message };
+
     const { error } = await admin
       .from("profiles")
       .update({ force_password_change: true })
       .eq("id", userId);
     if (error) return { error: error.message };
+
+    try {
+      await sendPasswordResetEmail(email, resetUrl);
+    } catch (err) {
+      return {
+        error: `Reset was approved, but the email failed: ${
+          err instanceof Error ? err.message : "Unknown email error"
+        }`
+      };
+    }
   }
 
   const { error } = await admin

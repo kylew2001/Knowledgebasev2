@@ -2,16 +2,22 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { createHash, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile, isSuperAdmin } from "@/lib/auth";
 import { sendInviteEmail, sendOtpEmail } from "@/lib/email";
+import { createMfaDeviceCookieValue, verifyMfaDeviceCookieValue } from "@/lib/mfa-device-cookie";
 
 type LookupRow = { user_id: string; email: string; force_password_change: boolean };
 
+function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 async function lookupByUsername(username: string): Promise<LookupRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .rpc("lookup_user_by_username", { p_username: username.toLowerCase().trim() })
     .maybeSingle();
   if (error) console.error("[lookupByUsername]", error.message, error.code);
@@ -45,11 +51,11 @@ async function writeAuditLog(
   }
 }
 
-async function setMfaCookieForRole(role: string): Promise<void> {
+async function setMfaCookieForRole(role: string, userId: string): Promise<void> {
   const cookieStore = await cookies();
   // super_admin: 24-hour expiry. editor/viewer: 1 year (remember device).
   const maxAge = role === "super_admin" ? 60 * 60 * 24 : 60 * 60 * 24 * 365;
-  cookieStore.set("mfa_at", new Date().toISOString(), {
+  cookieStore.set("mfa_at", await createMfaDeviceCookieValue(userId, role), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -58,20 +64,20 @@ async function setMfaCookieForRole(role: string): Promise<void> {
   });
 }
 
-async function hasRememberedMfaDevice(role: string): Promise<boolean> {
+async function hasRememberedMfaDevice(role: string, userId: string): Promise<boolean> {
   const cookieStore = await cookies();
-  const mfaAt = cookieStore.get("mfa_at")?.value;
-  const mfaTime = mfaAt ? new Date(mfaAt).getTime() : Number.NaN;
+  const remembered = await verifyMfaDeviceCookieValue(cookieStore.get("mfa_at")?.value, userId, role);
 
-  if (Number.isNaN(mfaTime)) return false;
+  if (!remembered) return false;
   if (role !== "super_admin") return true;
 
-  return Date.now() - mfaTime <= 24 * 60 * 60 * 1000;
+  return Date.now() - remembered.issuedAt <= 24 * 60 * 60 * 1000;
 }
 
 export async function completeMfaVerification(): Promise<void> {
   const current = await getCurrentProfile();
-  await setMfaCookieForRole(current?.profile.role ?? "viewer");
+  if (!current) return;
+  await setMfaCookieForRole(current.profile.role, current.profile.id);
 }
 
 export async function completeTotpSetup(): Promise<void> {
@@ -84,16 +90,14 @@ export async function completeTotpSetup(): Promise<void> {
     .update({ totp_setup_required: false })
     .eq("id", current.profile.id);
 
-  await setMfaCookieForRole(current.profile.role);
+  await setMfaCookieForRole(current.profile.role, current.profile.id);
   redirect("/knowledge-base");
 }
 
 export async function checkUsername(
   username: string
 ): Promise<{ found: boolean; requiresPasswordSet: boolean }> {
-  const row = await lookupByUsername(username);
-  if (!row) return { found: false, requiresPasswordSet: false };
-  return { found: true, requiresPasswordSet: row.force_password_change };
+  return { found: Boolean(username.trim()), requiresPasswordSet: false };
 }
 
 export async function requestForgotPasswordReset(username: string): Promise<{ error?: string }> {
@@ -197,7 +201,7 @@ export async function signInWithUsername(
 
   // Remember device: super_admin for 24 hours, editor/viewer for 1 year.
   const role = (profile?.role as string) ?? "viewer";
-  if (await hasRememberedMfaDevice(role)) {
+  if (await hasRememberedMfaDevice(role, row.user_id)) {
     redirect("/knowledge-base");
   }
 
@@ -237,7 +241,7 @@ export async function verifyEmailOtp(
     .update({ otp_code: null, otp_expires_at: null })
     .eq("id", userId);
 
-  await setMfaCookieForRole((profile.role as string) ?? "viewer");
+  await setMfaCookieForRole((profile.role as string) ?? "viewer", userId);
   redirect("/knowledge-base");
 }
 
@@ -307,8 +311,22 @@ export async function createUser(data: {
   );
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+  const setupToken = randomBytes(32).toString("base64url");
+  const setupUrl = `${appUrl.replace(/\/$/, "")}/reset-password/${setupToken}`;
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: tokenError } = await admin.from("password_reset_tokens").insert({
+    user_id: userId,
+    token_hash: hashResetToken(setupToken),
+    reason: "initial_setup",
+    created_by: current.profile.id,
+    expires_at: expiresAt
+  });
+
+  if (tokenError) return { error: tokenError.message };
+
   try {
-    await sendInviteEmail(data.email, data.username.toLowerCase().trim(), appUrl);
+    await sendInviteEmail(data.email, data.username.toLowerCase().trim(), setupUrl);
   } catch (err) {
     return {
       error: `User was created, but the invite email failed: ${
@@ -324,23 +342,50 @@ export async function setInitialPassword(
   username: string,
   password: string
 ): Promise<{ error: string } | null> {
-  const row = await lookupByUsername(username);
-  if (!row?.force_password_change) return { error: "not-allowed" };
+  return { error: "not-allowed" };
+}
 
+export async function setPasswordWithResetToken(
+  token: string,
+  password: string
+): Promise<{ error: string } | null> {
   const admin = createAdminClient();
-  const { error: pwError } = await admin.auth.admin.updateUserById(row.user_id, { password });
+  const { data: resetToken, error: tokenError } = await admin
+    .from("password_reset_tokens")
+    .select("id, user_id, expires_at, used_at")
+    .eq("token_hash", hashResetToken(token))
+    .maybeSingle();
+
+  if (tokenError || !resetToken || resetToken.used_at) return { error: "invalid-token" };
+  if (new Date(resetToken.expires_at as string).getTime() <= Date.now()) {
+    return { error: "expired-token" };
+  }
+
+  const { data: authUser } = await admin.auth.admin.getUserById(resetToken.user_id as string);
+  const email = authUser.user?.email;
+  if (!email) return { error: "invalid-token" };
+
+  const { error: pwError } = await admin.auth.admin.updateUserById(resetToken.user_id as string, { password });
   if (pwError) {
-    console.error("[setInitialPassword] updateUserById:", pwError.message, pwError.status);
+    console.error("[setPasswordWithResetToken] updateUserById:", pwError.message, pwError.status);
     return { error: "update-failed" };
   }
 
-  await admin
+  const [{ error: profileError }, { error: consumeError }] = await Promise.all([
+    admin
     .from("profiles")
     .update({ force_password_change: false, last_login_at: new Date().toISOString() })
-    .eq("id", row.user_id);
+      .eq("id", resetToken.user_id as string),
+    admin
+      .from("password_reset_tokens")
+      .update({ used_at: new Date().toISOString() })
+      .eq("id", resetToken.id as string)
+  ]);
+
+  if (profileError || consumeError) return { error: "update-failed" };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email: row.email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "sign-in-failed" };
 
   redirect("/auth/setup-2fa");
@@ -349,5 +394,7 @@ export async function setInitialPassword(
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete("mfa_at");
   redirect("/login");
 }

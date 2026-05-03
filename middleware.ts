@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { verifyMfaDeviceCookieValue } from "@/lib/mfa-device-cookie";
 
 const protectedRoutes = ["/knowledge-base", "/admin", "/settings"];
 type CookieToSet = { name: string; value: string; options: CookieOptions };
@@ -66,12 +67,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    const mfaAt = request.cookies.get("mfa_at")?.value;
-    const mfaTime = mfaAt ? new Date(mfaAt).getTime() : Number.NaN;
-    const hasRememberedDevice = !Number.isNaN(mfaTime);
+    const rememberedDevice = await verifyMfaDeviceCookieValue(
+      request.cookies.get("mfa_at")?.value,
+      user.id,
+      profile.role
+    );
+    const hasRememberedDevice = Boolean(rememberedDevice);
     const superAdminExpired =
       profile.role === "super_admin" &&
-      (!hasRememberedDevice || Date.now() - mfaTime > 24 * 60 * 60 * 1000);
+      (!rememberedDevice || Date.now() - rememberedDevice.issuedAt > 24 * 60 * 60 * 1000);
 
     if (!hasRememberedDevice || superAdminExpired) {
       const url = request.nextUrl.clone();

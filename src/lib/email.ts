@@ -20,7 +20,7 @@ function getResendClient(): Resend {
 export async function sendInviteEmail(
   to: string,
   username: string,
-  appUrl: string
+  setupUrl: string
 ): Promise<void> {
   const resend = getResendClient();
   const { error } = await resend.emails.send({
@@ -34,9 +34,38 @@ export async function sendInviteEmail(
         <p><strong>Intended recipient:</strong> ${to}</p>
         <p><strong>Your username:</strong> ${username}</p>
         <p>
-          To get started, visit <a href="${appUrl}" style="color: #0f766e;">${appUrl}</a>
-          and sign in with your username. You will be prompted to set your password on first login.
+          To get started, open this one-time setup link:
+          <a href="${setupUrl}" style="color: #0f766e;">${setupUrl}</a>
         </p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #94a3b8;">IT Support KB - Internal knowledge base</p>
+      </div>
+    `
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function sendPasswordResetEmail(
+  to: string,
+  resetUrl: string
+): Promise<void> {
+  const resend = getResendClient();
+  const { error } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: "Your IT Support KB password reset link",
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; color: #1e293b;">
+        <h2 style="color: #0f766e;">Password reset approved</h2>
+        <p>An administrator approved your password reset request.</p>
+        <p>
+          Set your new password using this one-time link:
+          <a href="${resetUrl}" style="color: #0f766e;">${resetUrl}</a>
+        </p>
+        <p style="color: #64748b; font-size: 14px;">This link expires in <strong>24 hours</strong>.</p>
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
         <p style="font-size: 12px; color: #94a3b8;">IT Support KB - Internal knowledge base</p>
       </div>
