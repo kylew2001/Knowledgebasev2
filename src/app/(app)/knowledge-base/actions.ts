@@ -182,3 +182,69 @@ export async function createPostShare(postId: string, durationHours: number | "f
 
   return { ok: true, token, expiresAt };
 }
+
+export type PostUserState = {
+  post_id: string;
+  pinned_at: string | null;
+  favourited_at: string | null;
+  last_viewed_at: string | null;
+};
+
+export async function getPostUserState(): Promise<PostUserState[]> {
+  const current = await getCurrentProfile();
+  if (!current) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("post_user_state")
+    .select("post_id, pinned_at, favourited_at, last_viewed_at")
+    .eq("user_id", current.user.id);
+
+  if (error || !data) return [];
+  return data as PostUserState[];
+}
+
+export async function setPostPinned(postId: string, pinned: boolean) {
+  const current = await getCurrentProfile();
+  if (!current) return { ok: false, error: "You must be signed in." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("post_user_state").upsert({
+    user_id: current.user.id,
+    post_id: postId,
+    pinned_at: pinned ? new Date().toISOString() : null
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function setPostFavourited(postId: string, favourited: boolean) {
+  const current = await getCurrentProfile();
+  if (!current) return { ok: false, error: "You must be signed in." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("post_user_state").upsert({
+    user_id: current.user.id,
+    post_id: postId,
+    favourited_at: favourited ? new Date().toISOString() : null
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function markPostViewed(postId: string) {
+  const current = await getCurrentProfile();
+  if (!current) return { ok: false, error: "You must be signed in." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("post_user_state").upsert({
+    user_id: current.user.id,
+    post_id: postId,
+    last_viewed_at: new Date().toISOString()
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
