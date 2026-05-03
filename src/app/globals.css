@@ -40,3 +40,72 @@ textarea {
 .focus-ring:focus-visible {
   outline-color: #0f766e;
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .post-print-root,
+  .post-print-root * {
+    visibility: visible;
+  }
+
+  .post-print-root {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: #ffffff !important;
+    color: #17202a !important;
+  }
+
+  .post-print-header,
+  .post-print-content {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .post-print-header {
+    padding: 0 0 14px !important;
+    border-bottom: 1px solid #d8e0e5 !important;
+    border-radius: 0 !important;
+  }
+
+  .post-print-content {
+    margin-top: 18px !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .print-hidden,
+  .print-hidden * {
+    display: none !important;
+  }
+
+  a {
+    color: #0f766e !important;
+    text-decoration: underline;
+  }
+
+  img,
+  figure,
+  pre,
+  table,
+  blockquote {
+    break-inside: avoid;
+  }
+
+  img {
+    max-width: 100% !important;
+  }
+}

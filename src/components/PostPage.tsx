@@ -9,6 +9,7 @@ import {
   Check,
   Clipboard,
   Code2,
+  Download,
   ExternalLink,
   FileText,
   Home,
@@ -1318,6 +1319,16 @@ export function PostPage({
     setEditing(false);
   }
 
+  function exportPdf() {
+    const previousTitle = document.title;
+    const filename = `${post.title || "Knowledge base post"} - ${formatDate(post.publishedAt)}`;
+    document.title = filename;
+    window.print();
+    window.setTimeout(() => {
+      document.title = previousTitle;
+    }, 500);
+  }
+
   function getShareHours() {
     if (shareDuration === "forever") return "forever";
     if (shareDuration !== "custom") return Number(shareDuration);
@@ -1418,9 +1429,9 @@ export function PostPage({
   const TypeIcon = cfg.icon;
 
   return (
-    <div className="space-y-6">
+    <div className="post-print-root space-y-6">
       {/* Header */}
-      <header className="flex flex-col gap-4 rounded-lg border border-line bg-white p-5 shadow-soft md:flex-row md:items-start md:justify-between">
+      <header className="post-print-header flex flex-col gap-4 rounded-lg border border-line bg-white p-5 shadow-soft md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           {sharedView ? (
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-brand">
@@ -1450,7 +1461,7 @@ export function PostPage({
             <span className="text-xs text-slate-400">{post.publishedBy || "Unknown"} · {formatDate(post.publishedAt)}</span>
           </div>
         </div>
-        {!sharedView && <div className="flex shrink-0 gap-2">
+        <div className="print-hidden flex shrink-0 flex-wrap gap-2">
           {editing ? (
             <>
               <button onClick={cancelEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
@@ -1462,10 +1473,15 @@ export function PostPage({
             </>
           ) : (
             <>
-              <button onClick={onBack} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
-                <Home className="h-4 w-4" /> Back
+              {!sharedView && (
+                <button onClick={onBack} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
+                  <Home className="h-4 w-4" /> Back
+                </button>
+              )}
+              <button onClick={exportPdf} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
+                <Download className="h-4 w-4" /> Export PDF
               </button>
-              {canEdit && (
+              {!sharedView && canEdit && (
                 <>
                   <button onClick={() => setShowShare(true)} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
                     <Share2 className="h-4 w-4" /> Share
@@ -1477,7 +1493,7 @@ export function PostPage({
               )}
             </>
           )}
-        </div>}
+        </div>
       </header>
 
       {showShare && (
@@ -1543,7 +1559,7 @@ export function PostPage({
       )}
 
       {/* Content */}
-      <div className="rounded-lg border border-line bg-white p-6 shadow-soft">
+      <div className="post-print-content rounded-lg border border-line bg-white p-6 shadow-soft">
         {current.length === 0 && !editing && (
           <p className="py-12 text-center text-sm text-slate-400">
             No content yet.{canEdit && " Click Edit to add widgets."}
