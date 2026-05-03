@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bold,
@@ -46,12 +46,24 @@ type TextWidget = {
   id: string;
   type: "text";
   content: string;
+  richLines?: RichTextLine[];
   fontSize?: string;
   fontFamily?: string;
   color?: string;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+};
+type RichTextLine = {
+  id: string;
+  text: string;
+  fontSize?: string;
+  fontFamily?: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  listType?: "bullet" | "numbered";
 };
 type ImageWidget   = { id: string; type: "image";   src: string; caption: string; storagePath?: string };
 type PdfWidget     = { id: string; type: "pdf";     filename: string };
@@ -386,7 +398,7 @@ function highlightCode(code: string, language: string): ReactNode[] {
 }
 
 function TextWidgetView({ w }: { w: TextWidget }) {
-  const textStyle: CSSProperties = {
+  const baseTextStyle: CSSProperties = {
     color: w.color ?? "#334155",
     fontFamily: w.fontFamily ?? "Inter, system-ui, sans-serif",
     fontSize: w.fontSize ?? "16px",
@@ -394,6 +406,17 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     fontStyle: w.italic ? "italic" : "normal",
     textDecoration: w.underline ? "underline" : "none"
   };
+
+  function lineStyle(line?: Partial<RichTextLine>): CSSProperties {
+    return {
+      color: line?.color ?? baseTextStyle.color,
+      fontFamily: line?.fontFamily ?? baseTextStyle.fontFamily,
+      fontSize: line?.fontSize ?? baseTextStyle.fontSize,
+      fontWeight: (line?.bold ?? w.bold) ? 700 : 400,
+      fontStyle: (line?.italic ?? w.italic) ? "italic" : "normal",
+      textDecoration: (line?.underline ?? w.underline) ? "underline" : "none"
+    };
+  }
 
   function renderLinks(text: string, keyPrefix: string): ReactNode[] {
     const nodes: ReactNode[] = [];
@@ -442,6 +465,62 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     });
   }
 
+  function renderRichLineBlocks(lines: RichTextLine[]) {
+    const blocks: ReactNode[] = [];
+    let index = 0;
+
+    while (index < lines.length) {
+      const line = lines[index];
+
+      if (!line.text && !line.listType) {
+        blocks.push(<br key={line.id} />);
+        index += 1;
+        continue;
+      }
+
+      if (line.listType === "bullet" || line.listType === "numbered") {
+        const listStart = index;
+        const listType = line.listType;
+        const items: ReactNode[] = [];
+
+        while (index < lines.length && lines[index].listType === listType) {
+          const currentLine = lines[index];
+          items.push(
+            <li key={currentLine.id} style={lineStyle(currentLine)}>
+              {renderInlineContent(currentLine.text)}
+            </li>
+          );
+          index += 1;
+        }
+
+        const ListTag = listType === "numbered" ? "ol" : "ul";
+        blocks.push(
+          <ListTag key={lines[listStart].id} className={`ml-5 space-y-1 ${listType === "numbered" ? "list-decimal" : "list-disc"}`}>
+            {items}
+          </ListTag>
+        );
+        continue;
+      }
+
+      blocks.push(
+        <p key={line.id} style={lineStyle(line)}>
+          {renderInlineContent(line.text)}
+        </p>
+      );
+      index += 1;
+    }
+
+    return blocks;
+  }
+
+  if (w.richLines?.length) {
+    return (
+      <div className="prose prose-sm max-w-none" style={baseTextStyle}>
+        {renderRichLineBlocks(w.richLines)}
+      </div>
+    );
+  }
+
   const blocks: ReactNode[] = [];
   const lines = w.content.split("\n");
   let index = 0;
@@ -456,13 +535,13 @@ function TextWidgetView({ w }: { w: TextWidget }) {
     }
 
     if (line.startsWith("## ")) {
-      blocks.push(<h2 key={index} className="text-lg font-bold" style={textStyle}>{line.slice(3)}</h2>);
+      blocks.push(<h2 key={index} className="text-lg font-bold" style={baseTextStyle}>{line.slice(3)}</h2>);
       index += 1;
       continue;
     }
 
     if (line.startsWith("**") && line.endsWith("**")) {
-      blocks.push(<p key={index} className="font-semibold" style={textStyle}>{renderInlineContent(line)}</p>);
+      blocks.push(<p key={index} className="font-semibold" style={baseTextStyle}>{renderInlineContent(line)}</p>);
       index += 1;
       continue;
     }
@@ -493,7 +572,7 @@ function TextWidgetView({ w }: { w: TextWidget }) {
         index += 1;
       }
 
-      blocks.push(<ul key={listStart} className="ml-5 list-disc space-y-1" style={textStyle}>{items}</ul>);
+      blocks.push(<ul key={listStart} className="ml-5 list-disc space-y-1" style={baseTextStyle}>{items}</ul>);
       continue;
     }
 
@@ -506,16 +585,16 @@ function TextWidgetView({ w }: { w: TextWidget }) {
         index += 1;
       }
 
-      blocks.push(<ol key={listStart} className="ml-5 list-decimal space-y-1" style={textStyle}>{items}</ol>);
+      blocks.push(<ol key={listStart} className="ml-5 list-decimal space-y-1" style={baseTextStyle}>{items}</ol>);
       continue;
     }
 
-    blocks.push(<p key={index} style={textStyle}>{renderInlineContent(line)}</p>);
+    blocks.push(<p key={index} style={baseTextStyle}>{renderInlineContent(line)}</p>);
     index += 1;
   }
 
   return (
-    <div className="prose prose-sm max-w-none" style={textStyle}>
+    <div className="prose prose-sm max-w-none" style={baseTextStyle}>
       {blocks}
     </div>
   );
@@ -528,22 +607,134 @@ function TextWidgetEditor({
   widget: TextWidget;
   onChange: (widget: TextWidget) => void;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   function update(patch: Partial<TextWidget>) {
     onChange({ ...widget, ...patch });
   }
 
-  function insertListPrefix(prefix: "- " | "1. ") {
-    const lines = widget.content ? widget.content.split("\n") : [""];
-    const next = lines.map((line, index) => {
-      if (!line.trim()) return prefix === "1. " ? `${index + 1}. ` : "- ";
-      if (line.startsWith("- ") || line.match(/^\d+\.\s/)) return line;
-      return prefix === "1. " ? `${index + 1}. ${line}` : `- ${line}`;
+  function getRichLines(): RichTextLine[] {
+    const textLines = widget.content.split("\n");
+    const existing = widget.richLines ?? [];
+
+    return textLines.map((text, index) => {
+      const current = existing[index];
+      if (current) return { ...current, text };
+
+      const numberedMatch = text.match(/^\d+\.\s+(.*)$/);
+      if (text.startsWith("## ")) {
+        return {
+          id: newId(),
+          text: text.slice(3),
+          fontSize: "20px",
+          fontFamily: widget.fontFamily,
+          color: widget.color,
+          bold: true,
+          italic: widget.italic,
+          underline: widget.underline
+        };
+      }
+      if (text.startsWith("- ")) {
+        return {
+          id: newId(),
+          text: text.slice(2),
+          fontSize: widget.fontSize,
+          fontFamily: widget.fontFamily,
+          color: widget.color,
+          bold: widget.bold,
+          italic: widget.italic,
+          underline: widget.underline,
+          listType: "bullet"
+        };
+      }
+      if (numberedMatch) {
+        return {
+          id: newId(),
+          text: numberedMatch[1],
+          fontSize: widget.fontSize,
+          fontFamily: widget.fontFamily,
+          color: widget.color,
+          bold: widget.bold,
+          italic: widget.italic,
+          underline: widget.underline,
+          listType: "numbered"
+        };
+      }
+      if (text.startsWith("**") && text.endsWith("**")) {
+        return {
+          id: newId(),
+          text: text.slice(2, -2),
+          fontSize: widget.fontSize,
+          fontFamily: widget.fontFamily,
+          color: widget.color,
+          bold: true,
+          italic: widget.italic,
+          underline: widget.underline
+        };
+      }
+
+      return {
+        id: newId(),
+        text,
+        fontSize: widget.fontSize,
+        fontFamily: widget.fontFamily,
+        color: widget.color,
+        bold: widget.bold,
+        italic: widget.italic,
+        underline: widget.underline
+      };
     });
-    update({ content: next.join("\n") });
   }
 
-  const activeButton = "border-brand bg-teal-50 text-brand";
+  function getSelectedLineRange() {
+    const textarea = textareaRef.current;
+    const content = widget.content;
+    if (!textarea) return { start: 0, end: Math.max(0, content.split("\n").length - 1) };
+
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    const start = content.slice(0, selectionStart).split("\n").length - 1;
+    const end = content.slice(0, Math.max(selectionStart, selectionEnd - 1)).split("\n").length - 1;
+
+    return { start, end };
+  }
+
+  function updateContent(content: string) {
+    const previous = getRichLines();
+    const lines = content.split("\n");
+    update({
+      content,
+      richLines: lines.map((text, index) => ({
+        ...(previous[index] ?? { id: newId() }),
+        text
+      }))
+    });
+  }
+
+  function updateSelectedLines(updater: (line: RichTextLine, index: number) => RichTextLine) {
+    const { start, end } = getSelectedLineRange();
+    const richLines = getRichLines().map((line, index) =>
+      index >= start && index <= end ? updater(line, index - start) : line
+    );
+    update({
+      content: richLines.map((line) => line.text).join("\n"),
+      richLines
+    });
+  }
+
+  function toggleSelectedList(listType: RichTextLine["listType"]) {
+    updateSelectedLines((line) => ({
+      ...line,
+      listType: line.listType === listType ? undefined : listType
+    }));
+  }
+
+  function applySelectedStyle(patch: Partial<RichTextLine>) {
+    updateSelectedLines((line) => ({ ...line, ...patch }));
+  }
+
   const inactiveButton = "border-line bg-white text-slate-600 hover:bg-mist";
+  const richPreviewWidget = { ...widget, richLines: getRichLines() };
 
   return (
     <div className="space-y-3">
@@ -552,7 +743,7 @@ function TextWidgetEditor({
           <Type className="h-3.5 w-3.5" />
           <select
             value={widget.fontFamily ?? "Inter, system-ui, sans-serif"}
-            onChange={(e) => update({ fontFamily: e.target.value })}
+            onChange={(e) => applySelectedStyle({ fontFamily: e.target.value })}
             className="bg-transparent outline-none"
           >
             <option value="Inter, system-ui, sans-serif">Default</option>
@@ -565,7 +756,7 @@ function TextWidgetEditor({
 
         <select
           value={widget.fontSize ?? "16px"}
-          onChange={(e) => update({ fontSize: e.target.value })}
+          onChange={(e) => applySelectedStyle({ fontSize: e.target.value })}
           className="focus-ring h-8 rounded-lg border border-line bg-white px-2 text-xs font-semibold text-slate-600"
         >
           <option value="13px">Small</option>
@@ -575,20 +766,20 @@ function TextWidgetEditor({
           <option value="32px">Title</option>
         </select>
 
-        <button type="button" title="Bold" onClick={() => update({ bold: !widget.bold })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.bold ? activeButton : inactiveButton}`}>
+        <button type="button" title="Bold" onClick={() => updateSelectedLines((line) => ({ ...line, bold: !line.bold }))} className={`focus-ring h-8 w-8 rounded-lg border ${inactiveButton}`}>
           <Bold className="mx-auto h-4 w-4" />
         </button>
-        <button type="button" title="Italic" onClick={() => update({ italic: !widget.italic })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.italic ? activeButton : inactiveButton}`}>
+        <button type="button" title="Italic" onClick={() => updateSelectedLines((line) => ({ ...line, italic: !line.italic }))} className={`focus-ring h-8 w-8 rounded-lg border ${inactiveButton}`}>
           <Italic className="mx-auto h-4 w-4" />
         </button>
-        <button type="button" title="Underline" onClick={() => update({ underline: !widget.underline })} className={`focus-ring h-8 w-8 rounded-lg border ${widget.underline ? activeButton : inactiveButton}`}>
+        <button type="button" title="Underline" onClick={() => updateSelectedLines((line) => ({ ...line, underline: !line.underline }))} className={`focus-ring h-8 w-8 rounded-lg border ${inactiveButton}`}>
           <Underline className="mx-auto h-4 w-4" />
         </button>
 
-        <button type="button" title="Bullet list" onClick={() => insertListPrefix("- ")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
+        <button type="button" title="Bullet list" onClick={() => toggleSelectedList("bullet")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
           <List className="mx-auto h-4 w-4" />
         </button>
-        <button type="button" title="Numbered list" onClick={() => insertListPrefix("1. ")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
+        <button type="button" title="Numbered list" onClick={() => toggleSelectedList("numbered")} className="focus-ring h-8 w-8 rounded-lg border border-line bg-white text-slate-600 hover:bg-mist">
           <ListOrdered className="mx-auto h-4 w-4" />
         </button>
 
@@ -597,17 +788,18 @@ function TextWidgetEditor({
           <input
             type="color"
             value={widget.color ?? "#334155"}
-            onChange={(e) => update({ color: e.target.value })}
+            onChange={(e) => applySelectedStyle({ color: e.target.value })}
             className="h-5 w-6 cursor-pointer border-0 bg-transparent p-0"
           />
         </label>
       </div>
 
       <textarea
+        ref={textareaRef}
         value={widget.content}
-        onChange={(e) => update({ content: e.target.value })}
+        onChange={(e) => updateContent(e.target.value)}
         rows={8}
-        placeholder="Write your content here... Use the toolbar for font, size, colour, bold, italic, underline, and lists."
+        placeholder="Write your content here... Select one or more lines before using the toolbar to format only those lines."
         className="focus-ring w-full rounded-lg border border-line px-3 py-2 text-sm"
         style={{
           color: widget.color ?? "#334155",
@@ -618,6 +810,10 @@ function TextWidgetEditor({
           textDecoration: widget.underline ? "underline" : "none"
         }}
       />
+      <div className="rounded-lg border border-line bg-white p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Text preview</p>
+        <TextWidgetView w={richPreviewWidget} />
+      </div>
     </div>
   );
 }

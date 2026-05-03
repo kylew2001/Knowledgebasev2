@@ -4,12 +4,24 @@ export type TextWidget = {
   id: string;
   type: "text";
   content: string;
+  richLines?: RichTextLine[];
   fontSize?: string;
   fontFamily?: string;
   color?: string;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+};
+export type RichTextLine = {
+  id: string;
+  text: string;
+  fontSize?: string;
+  fontFamily?: string;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  listType?: "bullet" | "numbered";
 };
 export type ImageWidget = { id: string; type: "image"; src: string; caption: string; storagePath?: string };
 export type PdfWidget = { id: string; type: "pdf"; filename: string };
