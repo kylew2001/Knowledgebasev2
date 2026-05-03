@@ -589,7 +589,7 @@ export function KnowledgeBase({
     .sort(([, a], [, b]) => new Date(b.last_viewed_at ?? 0).getTime() - new Date(a.last_viewed_at ?? 0).getTime())
     .map(([postId]) => visiblePostMap.get(postId))
     .filter((post): post is MockPost => Boolean(post))
-    .slice(0, 6);
+    .slice(0, 3);
 
   const selectedCategoryTitle = selectedCategory?.title ?? selectedPost?.category ?? "Unknown category";
   const level = selectedPost ? 2 : selectedSubcategory ? 2 : selectedCategory ? 1 : 0;
