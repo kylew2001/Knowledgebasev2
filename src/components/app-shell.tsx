@@ -19,7 +19,7 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
     ...(userRole === "super_admin"
       ? [{ href: "/admin", label: "Admin Dashboard", icon: LayoutDashboard }]
       : []),
-    { href: "/settings", label: "Settings", icon: Settings, muted: true }
+    { href: "/settings", label: "Settings", icon: Settings }
   ];
 
   function handleNavClick(href: string, e: React.MouseEvent) {
@@ -90,11 +90,7 @@ export function AppShell({ children, userRole = "super_admin", inactivityTimeout
                 key={item.href}
                 href={item.href}
                 onClick={(e) => handleNavClick(item.href, e)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  item.muted
-                    ? "text-slate-400 hover:bg-slate-50"
-                    : "bg-mist text-ink hover:bg-line"
-                }`}
+                className="flex items-center gap-3 rounded-lg bg-mist px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-line"
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
                 {item.label}
