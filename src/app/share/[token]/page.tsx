@@ -23,6 +23,7 @@ function hashShareToken(token: string) {
 
 async function withSignedImageUrls(widgets: Widget[], expiresInSeconds: number) {
   const admin = createAdminClient();
+  const signedUrlSeconds = Math.min(Math.max(60, expiresInSeconds), 60 * 60 * 24);
 
   return Promise.all(
     widgets.map(async (widget) => {
@@ -30,7 +31,7 @@ async function withSignedImageUrls(widgets: Widget[], expiresInSeconds: number) 
 
       const { data } = await admin.storage
         .from("knowledgebase-images")
-        .createSignedUrl(widget.storagePath, Math.max(60, expiresInSeconds));
+        .createSignedUrl(widget.storagePath, signedUrlSeconds);
 
       return data?.signedUrl ? { ...widget, src: data.signedUrl } : widget;
     })

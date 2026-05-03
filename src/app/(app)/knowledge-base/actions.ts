@@ -20,6 +20,7 @@ type KbPostRow = {
 };
 
 const MAX_SHARE_HOURS = 24 * 30;
+const FOREVER_SHARE_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
 async function withSignedImageUrls(widgets: Widget[], expiresIn = 60 * 60 * 24) {
   const supabase = await createClient();
@@ -152,14 +153,18 @@ function hashShareToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function createPostShare(postId: string, durationHours: number) {
+export async function createPostShare(postId: string, durationHours: number | "forever") {
   const current = await getCurrentProfile();
   if (!current || !["super_admin", "editor"].includes(current.profile.role)) {
     return { ok: false, error: "You do not have permission to share posts." };
   }
 
-  const hours = Math.max(1, Math.min(MAX_SHARE_HOURS, Math.round(durationHours)));
-  const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+  const hours = typeof durationHours === "number"
+    ? Math.max(1, Math.min(MAX_SHARE_HOURS, Math.round(durationHours)))
+    : null;
+  const expiresAt = durationHours === "forever"
+    ? FOREVER_SHARE_EXPIRES_AT
+    : new Date(Date.now() + (hours ?? 24) * 60 * 60 * 1000).toISOString();
   const token = randomBytes(32).toString("base64url");
   const supabase = await createClient();
 

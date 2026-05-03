@@ -1291,7 +1291,7 @@ export function PostPage({
   const [visibility, setVisibility] = useState<VisibilityRule>(post.visibility ?? { mode: "everyone", groupIds: [] });
   const [draftVisibility, setDraftVisibility] = useState<VisibilityRule>(visibility);
   const [showShare, setShowShare] = useState(false);
-  const [shareDuration, setShareDuration] = useState<"1" | "24" | "168" | "custom">("24");
+  const [shareDuration, setShareDuration] = useState<"24" | "168" | "forever" | "custom">("24");
   const [customShareValue, setCustomShareValue] = useState("2");
   const [customShareUnit, setCustomShareUnit] = useState<"hours" | "days">("hours");
   const [shareUrl, setShareUrl] = useState("");
@@ -1319,6 +1319,7 @@ export function PostPage({
   }
 
   function getShareHours() {
+    if (shareDuration === "forever") return "forever";
     if (shareDuration !== "custom") return Number(shareDuration);
     const value = Math.max(1, Number(customShareValue) || 1);
     return customShareUnit === "days" ? value * 24 : value;
@@ -1343,6 +1344,7 @@ export function PostPage({
 
   function formatShareRemaining() {
     if (!shareExpiresAt) return "";
+    if (shareExpiresAt.startsWith("9999-12-31")) return "Forever";
     const remaining = Math.max(0, new Date(shareExpiresAt).getTime() - now);
     const totalMinutes = Math.ceil(remaining / 60000);
     const days = Math.floor(totalMinutes / 1440);
@@ -1426,7 +1428,7 @@ export function PostPage({
               <span>Shared post</span>
               {shareExpiresAt && (
                 <span className="rounded-md bg-teal-50 px-2 py-1 text-xs text-teal-800">
-                  Expires in {formatShareRemaining()}
+                  {formatShareRemaining() === "Forever" ? "No expiry" : `Expires in ${formatShareRemaining()}`}
                 </span>
               )}
             </div>
@@ -1484,7 +1486,7 @@ export function PostPage({
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-ink">Share post</h3>
-                <p className="text-sm text-slate-500">Create a view-only link that expires automatically.</p>
+                <p className="text-sm text-slate-500">Create a view-only link with a chosen access window.</p>
               </div>
               <button type="button" onClick={() => setShowShare(false)} className="focus-ring rounded-lg p-1 hover:bg-panel">
                 <X className="h-5 w-5 text-slate-500" />
@@ -1494,14 +1496,14 @@ export function PostPage({
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: "1 hour", value: "1" },
                   { label: "1 day", value: "24" },
-                  { label: "1 week", value: "168" }
+                  { label: "1 week", value: "168" },
+                  { label: "Forever", value: "forever" }
                 ].map((option) => (
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => setShareDuration(option.value as "1" | "24" | "168")}
+                    onClick={() => setShareDuration(option.value as "24" | "168" | "forever")}
                     className={`focus-ring h-10 rounded-lg border text-sm font-semibold ${shareDuration === option.value ? "border-brand bg-teal-50 text-brand" : "border-line text-slate-600 hover:bg-panel"}`}
                   >
                     {option.label}
@@ -1510,7 +1512,7 @@ export function PostPage({
               </div>
 
               <button type="button" onClick={() => setShareDuration("custom")} className={`focus-ring h-10 w-full rounded-lg border text-sm font-semibold ${shareDuration === "custom" ? "border-brand bg-teal-50 text-brand" : "border-line text-slate-600 hover:bg-panel"}`}>
-                Custom time
+                Custom hours / days
               </button>
 
               {shareDuration === "custom" && (

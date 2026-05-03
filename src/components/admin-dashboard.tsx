@@ -80,6 +80,11 @@ function getShareStatus(link: SharedPostLink) {
   return "Active";
 }
 
+function formatShareExpiry(expiresAt: string) {
+  if (expiresAt.startsWith("9999-12-31")) return "Forever";
+  return new Date(expiresAt).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" });
+}
+
 export function AdminDashboard({
   users: initialUsers,
   groups: initialGroups,
@@ -738,7 +743,7 @@ export function AdminDashboard({
                         {new Date(link.created_at).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" })}
                       </td>
                       <td className="border-b border-line px-3 py-3 text-slate-600">
-                        {new Date(link.expires_at).toLocaleString("en-NZ", { dateStyle: "medium", timeStyle: "short" })}
+                        {formatShareExpiry(link.expires_at)}
                       </td>
                       <td className="border-b border-line px-3 py-3">
                         <span className={`rounded-md px-2 py-1 text-xs font-bold ${
