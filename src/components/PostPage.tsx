@@ -1142,11 +1142,9 @@ function StepsWidgetView({ w }: { w: StepsWidget }) {
               <p className="text-sm leading-6 text-slate-700">{step.text || "Step instructions"}</p>
               {(step.subpoints?.length ?? 0) > 0 && (
                 <ol className="mt-2 space-y-2">
-                  {step.subpoints?.map((subpoint, subpointIndex) => (
+                  {step.subpoints?.map((subpoint) => (
                     <li key={subpoint.id} className="flex items-start gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-                        {String.fromCharCode(97 + subpointIndex)}
-                      </span>
+                      <span className="mt-2 h-3 w-3 shrink-0 rounded-full bg-brand" />
                       <span className="pt-0.5 text-sm leading-5 text-slate-600">{subpoint.text || "Sub-point"}</span>
                     </li>
                   ))}
@@ -1412,11 +1410,9 @@ function StepsWidgetEditor({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {(step.subpoints ?? []).map((subpoint, subpointIndex) => (
+            {(step.subpoints ?? []).map((subpoint) => (
               <div key={subpoint.id} className="ml-10 flex items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-                  {String.fromCharCode(97 + subpointIndex)}
-                </span>
+                <span className="h-3.5 w-3.5 shrink-0 rounded-full bg-brand" />
                 <input
                   value={subpoint.text}
                   onChange={(e) => updateSubpoint(step.id, subpoint.id, e.target.value)}
