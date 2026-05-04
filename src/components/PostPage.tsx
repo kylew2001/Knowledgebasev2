@@ -1611,6 +1611,7 @@ type Props = {
   categoryTitle: string;
   groups: VisibilityGroup[];
   onSavePost?: (title: string, widgets: Widget[], visibility: VisibilityRule) => void;
+  onDeletePost?: () => void | Promise<void>;
   sharedView?: boolean;
   shareExpiresAt?: string;
   debugInfo?: Record<string, unknown>;
@@ -1644,6 +1645,7 @@ export function PostPage({
   categoryTitle,
   groups,
   onSavePost,
+  onDeletePost,
   sharedView = false,
   shareExpiresAt,
   debugInfo
@@ -1663,6 +1665,7 @@ export function PostPage({
   const [shareUrl, setShareUrl] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharePending, setSharePending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -1690,6 +1693,17 @@ export function PostPage({
     setVisibility(draftVisibility);
     onSavePost?.(nextTitle, draft, draftVisibility);
     setEditing(false);
+  }
+
+  async function deletePost() {
+    if (deletePending) return;
+    if (!window.confirm(`Delete "${title || "Untitled post"}"? This cannot be undone.`)) return;
+    setDeletePending(true);
+    try {
+      await onDeletePost?.();
+    } finally {
+      setDeletePending(false);
+    }
   }
 
   function exportPdf() {
@@ -1849,6 +1863,11 @@ export function PostPage({
         <div className="print-hidden flex shrink-0 flex-wrap gap-2">
           {editing ? (
             <>
+              {!sharedView && onDeletePost && (
+                <button onClick={deletePost} disabled={deletePending} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent">
+                  <Trash2 className="h-4 w-4" /> {deletePending ? "Deleting..." : "Delete"}
+                </button>
+              )}
               <button onClick={cancelEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
                 <X className="h-4 w-4" /> Cancel
               </button>

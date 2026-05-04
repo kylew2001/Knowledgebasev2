@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BookOpen, ChevronRight, Clock, FileText, FolderPlus, Home, Pencil, PenLine, Pin, Plus, Search, Star, X } from "lucide-react";
+import { BookOpen, ChevronRight, Clock, FileText, FolderPlus, Home, Pencil, PenLine, Pin, Plus, Search, Star, Trash2, X } from "lucide-react";
 import { categoryCards, iconOptions, mockPosts, type MockPost } from "@/lib/mock-data";
 import CardBuilderModal from "@/components/CardBuilderModal";
 import SubCategoryModal from "@/components/SubCategoryModal";
@@ -11,6 +11,7 @@ import { derivePostType, getPostWidgets } from "@/lib/post-content";
 import { canSeeVisibility, everyoneVisibility, getVisibilityLabel, type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
 import VisibilityEditor from "@/components/VisibilityEditor";
 import {
+  deletePostFromDatabase,
   markPostViewed,
   savePostToDatabase,
   savePostsToDatabase,
@@ -175,11 +176,13 @@ function PostQuickCard({ post, state, onOpen, onTogglePinned, onToggleFavourite 
 type EditCategoryModalProps = {
   category: Category;
   groups: VisibilityGroup[];
+  postCount: number;
   onClose: () => void;
   onSave: (updated: Partial<Category>) => void;
+  onDelete: () => void;
 };
 
-function EditCategoryModal({ category, groups, onClose, onSave }: EditCategoryModalProps) {
+function EditCategoryModal({ category, groups, postCount, onClose, onSave, onDelete }: EditCategoryModalProps) {
   const [title, setTitle] = useState(category.title);
   const [description, setDescription] = useState(category.description);
   const [tagsText, setTagsText] = useState(category.tags.join(", "));
@@ -202,6 +205,8 @@ function EditCategoryModal({ category, groups, onClose, onSave }: EditCategoryMo
   }
 
   const PreviewIcon = iconOptions.find((o) => o.name === iconName)?.icon ?? category.icon;
+  const subcategoryCount = category.subcategories.length;
+  const canDelete = postCount === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
@@ -283,9 +288,26 @@ function EditCategoryModal({ category, groups, onClose, onSave }: EditCategoryMo
             onChange={setVisibility}
           />
           <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={!canDelete}
+              title={!canDelete ? "Move or delete posts under this category first." : "Delete category"}
+              className="focus-ring h-11 flex-1 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <Trash2 className="h-4 w-4" />
+                Delete{subcategoryCount > 0 ? ` ${subcategoryCount} subcategor${subcategoryCount === 1 ? "y" : "ies"}` : ""}
+              </span>
+            </button>
             <button type="button" onClick={onClose} className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel">Cancel</button>
             <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">Save changes</button>
           </div>
+          {!canDelete && (
+            <p className="text-xs text-red-600">
+              This category has {postCount} post{postCount !== 1 ? "s" : ""}. Move or delete those posts before deleting the category.
+            </p>
+          )}
         </form>
       </div>
     </div>
@@ -299,11 +321,13 @@ type EditSubCategoryModalProps = {
   categoryTitle: string;
   groups: VisibilityGroup[];
   visibility: VisibilityRule;
+  postCount: number;
   onClose: () => void;
   onSave: (newName: string, visibility: VisibilityRule) => void;
+  onDelete: () => void;
 };
 
-function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initialVisibility, onClose, onSave }: EditSubCategoryModalProps) {
+function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initialVisibility, postCount, onClose, onSave, onDelete }: EditSubCategoryModalProps) {
   const [value, setValue] = useState(name);
   const [visibility, setVisibility] = useState<VisibilityRule>(initialVisibility);
 
@@ -313,6 +337,7 @@ function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initial
     onSave(value.trim(), visibility);
     onClose();
   }
+  const canDelete = postCount === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 sm:items-center sm:p-4">
@@ -337,9 +362,26 @@ function EditSubCategoryModal({ name, categoryTitle, groups, visibility: initial
             onChange={setVisibility}
           />
           <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={!canDelete}
+              title={!canDelete ? "Move or delete posts under this subcategory first." : "Delete subcategory"}
+              className="focus-ring h-11 flex-1 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </span>
+            </button>
             <button type="button" onClick={onClose} className="focus-ring h-11 flex-1 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-panel">Cancel</button>
             <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">Save</button>
           </div>
+          {!canDelete && (
+            <p className="text-xs text-red-600">
+              This subcategory has {postCount} post{postCount !== 1 ? "s" : ""}. Move or delete those posts before deleting the subcategory.
+            </p>
+          )}
         </form>
       </div>
     </div>
@@ -537,6 +579,63 @@ export function KnowledgeBase({
     );
   }
 
+  async function handleDeletePost(postId: string) {
+    const result = await deletePostFromDatabase(postId);
+    if (!result.ok) {
+      window.alert(result.error ?? "Post could not be deleted from the database.");
+      return;
+    }
+
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+    setPostUserState((prev) => {
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+    setSelectedPost(null);
+  }
+
+  function handleDeleteCategory(category: Category) {
+    const postCount = posts.filter((post) => post.category === category.title).length;
+    if (postCount > 0) return;
+    if (category.subcategories.length > 0) {
+      const confirmed = window.confirm(
+        `Delete "${category.title}" and all ${category.subcategories.length} subcategor${category.subcategories.length === 1 ? "y" : "ies"}?`
+      );
+      if (!confirmed) return;
+    }
+
+    setCategories((prev) => prev.filter((item) => item.title !== category.title));
+    if (selectedCategory?.title === category.title) {
+      setSelectedCategory(null);
+      setSelectedSubcategory(null);
+      setSelectedPost(null);
+    }
+    setEditingCategory(null);
+  }
+
+  function handleDeleteSubcategory(categoryTitle: string, subcategoryName: string) {
+    const postCount = posts.filter((post) => post.category === categoryTitle && post.subcategory === subcategoryName).length;
+    if (postCount > 0) return;
+
+    const updatedCats = categories.map((category) =>
+      category.title === categoryTitle
+        ? {
+            ...category,
+            subcategories: category.subcategories.filter((name) => name !== subcategoryName),
+            subcategoryVisibility: Object.fromEntries(
+              Object.entries(category.subcategoryVisibility ?? {}).filter(([key]) => key !== subcategoryName)
+            )
+          }
+        : category
+    );
+    setCategories(updatedCats);
+    setSelectedCategory(updatedCats.find((category) => category.title === categoryTitle) ?? null);
+    if (selectedSubcategory === subcategoryName) setSelectedSubcategory(null);
+    setSelectedPost(null);
+    setEditingSubcategory(null);
+  }
+
   const visibleCategories = categories.filter((category) =>
     canSeeVisibility(category.visibility, userGroupIds, groups, canSeeAll)
   );
@@ -608,6 +707,7 @@ export function KnowledgeBase({
         onBack={() => setSelectedPost(null)}
         groups={groups}
         onSavePost={(title, widgets, visibility) => handleSavePost(selectedPost.id, title, widgets, visibility)}
+        onDeletePost={() => handleDeletePost(selectedPost.id)}
         debugInfo={{
           selectedPostId: selectedPost.id,
           selectedPostTitle: selectedPost.title,
@@ -940,8 +1040,10 @@ export function KnowledgeBase({
         <EditCategoryModal
           category={editingCategory}
           groups={groups}
+          postCount={posts.filter((post) => post.category === editingCategory.title).length}
           onClose={() => setEditingCategory(null)}
           onSave={handleSaveCategory}
+          onDelete={() => handleDeleteCategory(editingCategory)}
         />
       )}
       {editingSubcategory && selectedCategory && (
@@ -950,8 +1052,10 @@ export function KnowledgeBase({
           categoryTitle={selectedCategory.title}
           groups={groups}
           visibility={selectedCategory.subcategoryVisibility?.[editingSubcategory] ?? everyoneVisibility}
+          postCount={posts.filter((post) => post.category === selectedCategory.title && post.subcategory === editingSubcategory).length}
           onClose={() => setEditingSubcategory(null)}
           onSave={handleSaveSubcategory}
+          onDelete={() => handleDeleteSubcategory(selectedCategory.title, editingSubcategory)}
         />
       )}
     </div>

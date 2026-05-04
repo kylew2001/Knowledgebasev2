@@ -149,6 +149,50 @@ export async function savePostsToDatabase(posts: MockPost[]) {
   return { ok: true };
 }
 
+export async function deletePostFromDatabase(postId: string) {
+  const current = await getCurrentProfile();
+  if (!current || !["super_admin", "editor"].includes(current.profile.role)) {
+    return { ok: false, error: "You do not have permission to delete posts." };
+  }
+
+  const supabase = await createClient();
+  const { data: post, error: loadError } = await supabase
+    .from("kb_posts")
+    .select("widgets")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (loadError) {
+    console.error("Failed to load knowledge base post before delete", loadError);
+    return { ok: false, error: loadError.message };
+  }
+
+  const widgets = ((post?.widgets ?? []) as Widget[]);
+  const imagePaths = widgets
+    .filter((widget): widget is Extract<Widget, { type: "image" }> => widget.type === "image")
+    .map((widget) => widget.storagePath)
+    .filter((path): path is string => Boolean(path));
+
+  if (imagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from("knowledgebase-images")
+      .remove(imagePaths);
+
+    if (storageError) {
+      console.error("Failed to delete knowledge base post images", storageError);
+    }
+  }
+
+  const { error } = await supabase.from("kb_posts").delete().eq("id", postId);
+
+  if (error) {
+    console.error("Failed to delete knowledge base post", error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
+}
+
 function hashShareToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
