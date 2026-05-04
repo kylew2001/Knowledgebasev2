@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bold,
@@ -127,6 +127,21 @@ const defaultContent: Record<string, Widget[]> = {
 function newId() { return Math.random().toString(36).slice(2); }
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function parsePastedListItems(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^[-*]\s+\[[ x]\]\s+/i, "")
+        .replace(/^[-*•]\s+/, "")
+        .replace(/^\d+[\).]\s+/, "")
+        .replace(/^[a-z][\).]\s+/i, "")
+        .trim()
+    )
+    .filter(Boolean);
+}
 
 // ── Widget picker ────────────────────────────────────────────────────────────
 
@@ -1149,6 +1164,31 @@ function ChecklistWidgetEditor({
     update({ items: widget.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item)) });
   }
 
+  function handleItemPaste(e: ClipboardEvent<HTMLInputElement>, itemId: string) {
+    const pastedItems = parsePastedListItems(e.clipboardData.getData("text"));
+    if (pastedItems.length <= 1) return;
+    e.preventDefault();
+
+    const itemIndex = widget.items.findIndex((item) => item.id === itemId);
+    if (itemIndex === -1) return;
+
+    const currentItem = widget.items[itemIndex];
+    const replacementItems = pastedItems.map((text, index) => ({
+      id: index === 0 ? currentItem.id : newId(),
+      text,
+      checked: index === 0 ? currentItem.checked : false,
+      subpoints: index === 0 ? currentItem.subpoints : undefined
+    }));
+
+    update({
+      items: [
+        ...widget.items.slice(0, itemIndex),
+        ...replacementItems,
+        ...widget.items.slice(itemIndex + 1)
+      ]
+    });
+  }
+
   function removeItem(itemId: string) {
     update({ items: widget.items.filter((item) => item.id !== itemId) });
   }
@@ -1209,6 +1249,7 @@ function ChecklistWidgetEditor({
               <input
                 value={item.text}
                 onChange={(e) => updateItem(item.id, { text: e.target.value })}
+                onPaste={(e) => handleItemPaste(e, item.id)}
                 placeholder="Checklist item"
                 className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
               />
@@ -1271,6 +1312,30 @@ function StepsWidgetEditor({
     update({ steps: widget.steps.map((step) => (step.id === stepId ? { ...step, text } : step)) });
   }
 
+  function handleStepPaste(e: ClipboardEvent<HTMLInputElement>, stepId: string) {
+    const pastedSteps = parsePastedListItems(e.clipboardData.getData("text"));
+    if (pastedSteps.length <= 1) return;
+    e.preventDefault();
+
+    const stepIndex = widget.steps.findIndex((step) => step.id === stepId);
+    if (stepIndex === -1) return;
+
+    const currentStep = widget.steps[stepIndex];
+    const replacementSteps = pastedSteps.map((text, index) => ({
+      id: index === 0 ? currentStep.id : newId(),
+      text,
+      subpoints: index === 0 ? currentStep.subpoints : undefined
+    }));
+
+    update({
+      steps: [
+        ...widget.steps.slice(0, stepIndex),
+        ...replacementSteps,
+        ...widget.steps.slice(stepIndex + 1)
+      ]
+    });
+  }
+
   function removeStep(stepId: string) {
     update({ steps: widget.steps.filter((step) => step.id !== stepId) });
   }
@@ -1328,6 +1393,7 @@ function StepsWidgetEditor({
               <input
                 value={step.text}
                 onChange={(e) => updateStep(step.id, e.target.value)}
+                onPaste={(e) => handleStepPaste(e, step.id)}
                 placeholder="Step instructions"
                 className="focus-ring h-10 min-w-0 flex-1 rounded-lg border border-line bg-white px-3 text-sm"
               />
