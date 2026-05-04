@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { type MockPost } from "@/lib/mock-data";
-import { derivePostType, type Widget } from "@/lib/post-content";
 import { type VisibilityGroup, type VisibilityRule } from "@/lib/visibility";
 import VisibilityEditor from "@/components/VisibilityEditor";
 
@@ -25,32 +24,19 @@ export default function NewPostModal({
   onAdd
 }: Props) {
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
   const [visibility, setVisibility] = useState<VisibilityRule>({ mode: "everyone", groupIds: [] });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
 
-    const widgets: Widget[] = [];
-
-    if (body.trim()) {
-      widgets.push({
-        id: crypto.randomUUID(),
-        type: "text",
-        content: body.trim()
-      });
-    }
-
-    const derivedType = derivePostType(widgets);
-
     onAdd({
       id: crypto.randomUUID(),
       title: title.trim(),
       publishedBy,
       publishedAt: new Date().toISOString().split("T")[0],
-      type: derivedType === "empty" ? undefined : derivedType,
-      widgets,
+      type: undefined,
+      widgets: [],
       visibility,
       subcategory: subcategoryTitle,
       category: categoryTitle
@@ -87,17 +73,6 @@ export default function NewPostModal({
           </label>
 
           <label className="block">
-            <span className="text-sm font-semibold text-slate-700">Content</span>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={5}
-              placeholder="Write your article content here..."
-              className="focus-ring mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm"
-            />
-          </label>
-
-          <label className="block">
             <span className="text-sm font-semibold text-slate-700">PDF file</span>
             <input
               type="file"
@@ -110,10 +85,6 @@ export default function NewPostModal({
               PDF attachments will be re-added in future when more database storage is added.
             </span>
           </label>
-
-          <p className="rounded-lg bg-panel px-3 py-2 text-xs font-semibold text-slate-500">
-            The post type is detected from its widgets. PDF attachments are paused for now.
-          </p>
 
           <VisibilityEditor
             label="Post visibility"
@@ -131,7 +102,7 @@ export default function NewPostModal({
               Cancel
             </button>
             <button className="focus-ring h-11 flex-1 rounded-lg bg-brand text-sm font-bold text-white hover:bg-teal-800">
-              Publish post
+              Create and edit
             </button>
           </div>
         </form>

@@ -1722,6 +1722,8 @@ type Props = {
   groups: VisibilityGroup[];
   onSavePost?: (title: string, widgets: Widget[], visibility: VisibilityRule) => void;
   onDeletePost?: () => void | Promise<void>;
+  initialEditing?: boolean;
+  onInitialEditingConsumed?: () => void;
   sharedView?: boolean;
   shareExpiresAt?: string;
   debugInfo?: Record<string, unknown>;
@@ -1756,12 +1758,14 @@ export function PostPage({
   groups,
   onSavePost,
   onDeletePost,
+  initialEditing = false,
+  onInitialEditingConsumed,
   sharedView = false,
   shareExpiresAt,
   debugInfo
 }: Props) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing && canEdit && !sharedView);
   const [title, setTitle] = useState(post.title);
   const [draftTitle, setDraftTitle] = useState(post.title);
   const [widgets, setWidgets] = useState<Widget[]>(post.widgets ?? defaultContent[post.id] ?? []);
@@ -1777,6 +1781,10 @@ export function PostPage({
   const [sharePending, setSharePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (initialEditing && canEdit && !sharedView) onInitialEditingConsumed?.();
+  }, [canEdit, initialEditing, onInitialEditingConsumed, sharedView]);
 
   useEffect(() => {
     if (!shareExpiresAt) return;

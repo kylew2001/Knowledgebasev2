@@ -496,6 +496,7 @@ export function KnowledgeBase({
   const [search, setSearch] = useState("");
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingSubcategory, setEditingSubcategory] = useState<string | null>(null);
+  const [autoEditPostId, setAutoEditPostId] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = () => { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); setSearch(""); };
@@ -643,6 +644,10 @@ export function KnowledgeBase({
     const deletedPostIds = loadDeletedPostIds();
     if (deletedPostIds.delete(post.id)) saveDeletedPostIds(deletedPostIds);
     setPosts((prev) => [post, ...prev]);
+    setSelectedPost(post);
+    setSelectedSubcategory(post.subcategory);
+    setSelectedCategory(categories.find((category) => category.title === post.category) ?? selectedCategory);
+    setAutoEditPostId(post.id);
     void savePostToDatabase(post);
   }
 
@@ -794,6 +799,7 @@ export function KnowledgeBase({
   if (selectedPost) {
     return (
       <PostPage
+        key={selectedPost.id}
         post={selectedPost}
         userRole={userRole as import("@/lib/auth").UserRole}
         categoryTitle={selectedCategoryTitle}
@@ -801,6 +807,8 @@ export function KnowledgeBase({
         groups={groups}
         onSavePost={(title, widgets, visibility) => handleSavePost(selectedPost.id, title, widgets, visibility)}
         onDeletePost={() => handleDeletePost(selectedPost.id)}
+        initialEditing={autoEditPostId === selectedPost.id}
+        onInitialEditingConsumed={() => setAutoEditPostId(null)}
         debugInfo={{
           selectedPostId: selectedPost.id,
           selectedPostTitle: selectedPost.title,
