@@ -143,6 +143,17 @@ function parsePastedListItems(text: string) {
     .filter(Boolean);
 }
 
+function parsePastedTable(text: string) {
+  const rows = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.split("\t").map((cell) => cell.trim()))
+    .filter((row) => row.some(Boolean));
+
+  return rows;
+}
+
 // ── Widget picker ────────────────────────────────────────────────────────────
 
 const widgetTypes = [
@@ -1514,6 +1525,42 @@ function TableWidgetEditor({
     });
   }
 
+  function handleCellPaste(e: ClipboardEvent<HTMLInputElement>, rowIndex: number, columnIndex: number) {
+    const parsedRows = parsePastedTable(e.clipboardData.getData("text"));
+    const pastedRows =
+      parsedRows.length === 1 &&
+      widget.columns.length > 1 &&
+      parsedRows[0].length > widget.columns.length &&
+      parsedRows[0].length % widget.columns.length === 0
+        ? Array.from({ length: parsedRows[0].length / widget.columns.length }, (_, index) =>
+            parsedRows[0].slice(index * widget.columns.length, (index + 1) * widget.columns.length)
+          )
+        : parsedRows;
+    const isTablePaste = pastedRows.length > 1 || (pastedRows[0]?.length ?? 0) > 1;
+    if (!isTablePaste) return;
+    e.preventDefault();
+
+    const requiredColumnCount = Math.max(
+      widget.columns.length,
+      columnIndex + Math.max(...pastedRows.map((row) => row.length))
+    );
+    const nextColumns = Array.from({ length: requiredColumnCount }, (_, index) =>
+      widget.columns[index] ?? `Column ${index + 1}`
+    );
+    const requiredRowCount = Math.max(widget.rows.length, rowIndex + pastedRows.length);
+    const nextRows = Array.from({ length: requiredRowCount }, (_, nextRowIndex) =>
+      nextColumns.map((_, nextColumnIndex) => widget.rows[nextRowIndex]?.[nextColumnIndex] ?? "")
+    );
+
+    pastedRows.forEach((pastedRow, pastedRowIndex) => {
+      pastedRow.forEach((cell, pastedColumnIndex) => {
+        nextRows[rowIndex + pastedRowIndex][columnIndex + pastedColumnIndex] = cell;
+      });
+    });
+
+    update({ columns: nextColumns, rows: nextRows });
+  }
+
   function addRow() {
     update({ rows: [...widget.rows, widget.columns.map(() => "")] });
   }
@@ -1557,6 +1604,7 @@ function TableWidgetEditor({
                   key={`${rowIndex}-${columnIndex}`}
                   value={row[columnIndex] ?? ""}
                   onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+                  onPaste={(e) => handleCellPaste(e, rowIndex, columnIndex)}
                   placeholder="Cell"
                   className="focus-ring h-9 rounded-lg border border-line bg-white px-2 text-sm"
                 />
