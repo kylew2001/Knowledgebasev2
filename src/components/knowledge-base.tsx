@@ -32,9 +32,18 @@ type LocalPostUserState = Record<string, {
   last_viewed_at: string | null;
 }>;
 
-const initialCategories: Category[] = categoryCards.map((c) => ({ ...c }));
+type StoredCategory = Omit<Category, "icon"> & { iconName: string };
+
+const initialCategories: Category[] = categoryCards.map((category) => ({
+  ...category,
+  subcategories: [...category.subcategories],
+  tags: [...category.tags],
+  subcategoryVisibility: { ...(category.subcategoryVisibility ?? {}) }
+}));
 const POST_STORAGE_KEY = "knowledgebase-v2-posts";
 const POST_DB_MIGRATION_KEY = "knowledgebase-v2-posts-db-migrated";
+const DELETED_POST_IDS_KEY = "knowledgebase-v2-deleted-post-ids";
+const CATEGORY_STORAGE_KEY = "knowledgebase-v2-categories";
 
 const typeConfig = {
   pdf:     { label: "PDF",     icon: FileText, bg: "bg-orange-50", fg: "text-orange-600" },
@@ -81,11 +90,75 @@ function loadStoredPosts() {
   }
 }
 
-function mergePostsWithSeedData(databasePosts: MockPost[]) {
-  if (!databasePosts.length) return mockPosts;
+function loadDeletedPostIds() {
+  if (typeof window === "undefined") return new Set<string>();
 
-  const databaseIds = new Set(databasePosts.map((post) => post.id));
-  return [...databasePosts, ...mockPosts.filter((post) => !databaseIds.has(post.id))];
+  try {
+    const raw = window.localStorage.getItem(DELETED_POST_IDS_KEY);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveDeletedPostIds(ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(DELETED_POST_IDS_KEY, JSON.stringify([...ids]));
+}
+
+function getCategoryIconName(category: Category) {
+  return iconOptions.find((option) => option.icon === category.icon)?.name ?? iconOptions[0].name;
+}
+
+function serialiseCategories(categories: Category[]): StoredCategory[] {
+  return categories.map((category) => {
+    const { icon: _icon, ...rest } = category;
+    return {
+      ...rest,
+      iconName: getCategoryIconName(category)
+    };
+  });
+}
+
+function hydrateCategory(category: StoredCategory): Category {
+  const icon = iconOptions.find((option) => option.name === category.iconName)?.icon ?? iconOptions[0].icon;
+  const { iconName: _iconName, ...rest } = category;
+  return {
+    ...rest,
+    icon,
+    tags: Array.isArray(rest.tags) ? rest.tags : [],
+    subcategories: Array.isArray(rest.subcategories) ? rest.subcategories : [],
+    subcategoryVisibility: rest.subcategoryVisibility ?? {}
+  };
+}
+
+function loadStoredCategories() {
+  if (typeof window === "undefined") return initialCategories;
+
+  try {
+    const raw = window.localStorage.getItem(CATEGORY_STORAGE_KEY);
+    if (!raw) return initialCategories;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as StoredCategory[]).map(hydrateCategory) : initialCategories;
+  } catch {
+    return initialCategories;
+  }
+}
+
+function saveCategoriesToStorage(categories: Category[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(serialiseCategories(categories)));
+}
+
+function mergePostsWithSeedData(databasePosts: MockPost[], deletedPostIds = new Set<string>()) {
+  const visibleDatabasePosts = databasePosts.filter((post) => !deletedPostIds.has(post.id));
+  const visibleSeedPosts = mockPosts.filter((post) => !deletedPostIds.has(post.id));
+  if (!visibleDatabasePosts.length) return visibleSeedPosts;
+
+  const databaseIds = new Set(visibleDatabasePosts.map((post) => post.id));
+  return [...visibleDatabasePosts, ...visibleSeedPosts.filter((post) => !databaseIds.has(post.id))];
 }
 
 function getCategoryResourceCount(posts: MockPost[], categoryTitle: string) {
@@ -431,18 +504,25 @@ export function KnowledgeBase({
   }, []);
 
   useEffect(() => {
+    setCategories(loadStoredCategories());
+
     const storedPosts = loadStoredPosts();
+    const deletedPostIds = loadDeletedPostIds();
     const alreadyMigrated = window.localStorage.getItem(POST_DB_MIGRATION_KEY) === "true";
 
     if (storedPosts && canEdit && !alreadyMigrated) {
-      setPosts(storedPosts);
-      void savePostsToDatabase(storedPosts).then((result) => {
+      const visibleStoredPosts = storedPosts.filter((post) => !deletedPostIds.has(post.id));
+      setPosts(visibleStoredPosts);
+      void savePostsToDatabase(visibleStoredPosts).then((result) => {
         if (result.ok) {
           window.localStorage.setItem(POST_DB_MIGRATION_KEY, "true");
           window.localStorage.removeItem(POST_STORAGE_KEY);
         }
       });
+      return;
     }
+
+    setPosts((current) => current.filter((post) => !deletedPostIds.has(post.id)));
   }, [canEdit]);
 
   function goHome() { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); setSearch(""); }
@@ -495,7 +575,9 @@ export function KnowledgeBase({
   }
 
   function handleAddCategory(category: Category) {
-    setCategories((prev) => [...prev, category]);
+    const updated = [...categories, category];
+    setCategories(updated);
+    saveCategoriesToStorage(updated);
   }
 
   function handleAddSubCategory(name: string, visibility: VisibilityRule) {
@@ -510,6 +592,7 @@ export function KnowledgeBase({
         : c
     );
     setCategories(updated);
+    saveCategoriesToStorage(updated);
     setSelectedCategory(updated.find((c) => c.title === selectedCategory.title) ?? null);
   }
 
@@ -529,6 +612,7 @@ export function KnowledgeBase({
       });
     }
     setCategories(next);
+    saveCategoriesToStorage(next);
     if (selectedCategory?.title === oldTitle) {
       setSelectedCategory(next.find((c) => c.title === (updated.title ?? oldTitle)) ?? null);
     }
@@ -550,11 +634,14 @@ export function KnowledgeBase({
         : c
     );
     setCategories(updatedCats);
+    saveCategoriesToStorage(updatedCats);
     setSelectedCategory(updatedCats.find((c) => c.title === selectedCategory.title) ?? null);
     if (selectedSubcategory === oldName) setSelectedSubcategory(newName);
   }
 
   function handleAddPost(post: MockPost) {
+    const deletedPostIds = loadDeletedPostIds();
+    if (deletedPostIds.delete(post.id)) saveDeletedPostIds(deletedPostIds);
     setPosts((prev) => [post, ...prev]);
     void savePostToDatabase(post);
   }
@@ -586,6 +673,9 @@ export function KnowledgeBase({
       return;
     }
 
+    const deletedPostIds = loadDeletedPostIds();
+    deletedPostIds.add(postId);
+    saveDeletedPostIds(deletedPostIds);
     setPosts((prev) => prev.filter((post) => post.id !== postId));
     setPostUserState((prev) => {
       const next = { ...prev };
@@ -605,7 +695,9 @@ export function KnowledgeBase({
       if (!confirmed) return;
     }
 
-    setCategories((prev) => prev.filter((item) => item.title !== category.title));
+    const updatedCategories = categories.filter((item) => item.title !== category.title);
+    setCategories(updatedCategories);
+    saveCategoriesToStorage(updatedCategories);
     if (selectedCategory?.title === category.title) {
       setSelectedCategory(null);
       setSelectedSubcategory(null);
@@ -630,6 +722,7 @@ export function KnowledgeBase({
         : category
     );
     setCategories(updatedCats);
+    saveCategoriesToStorage(updatedCats);
     setSelectedCategory(updatedCats.find((category) => category.title === categoryTitle) ?? null);
     if (selectedSubcategory === subcategoryName) setSelectedSubcategory(null);
     setSelectedPost(null);
