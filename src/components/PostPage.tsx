@@ -1105,7 +1105,7 @@ function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
               <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${item.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
                 <Check className="h-3.5 w-3.5" />
               </span>
-              <span className={item.checked ? "text-slate-500 line-through" : ""}>{item.text || "Checklist item"}</span>
+              <span className={item.checked ? "text-slate-500" : ""}>{item.text || "Checklist item"}</span>
             </div>
             {(item.subpoints?.length ?? 0) > 0 && (
               <ul className="ml-10 mt-2 space-y-1">
@@ -1115,7 +1115,7 @@ function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
                       <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${subpoint.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
                         <Check className="h-3 w-3" />
                       </span>
-                      <span className={subpoint.checked ? "text-slate-500 line-through" : ""}>{subpoint.text || "Sub-point"}</span>
+                      <span className={subpoint.checked ? "text-slate-500" : ""}>{subpoint.text || "Sub-point"}</span>
                     </div>
                   </li>
                 ))}
