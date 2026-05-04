@@ -72,6 +72,14 @@ function getTypeConfig(type: MockPost["type"] | string | null | undefined) {
   return typeConfig.written;
 }
 
+function compareText(a: string, b: string) {
+  return a.localeCompare(b, undefined, { sensitivity: "base" });
+}
+
+function comparePostsByTitle(a: MockPost, b: MockPost) {
+  return compareText(a.title || "Untitled post", b.title || "Untitled post");
+}
+
 function getStoredPostType(widgets: import("@/lib/post-content").Widget[]) {
   const derivedType = derivePostType(widgets);
   return derivedType === "empty" ? undefined : derivedType;
@@ -739,14 +747,14 @@ export function KnowledgeBase({
   );
   const visibleSubcategories = selectedCategory?.subcategories.filter((name) =>
     canSeeVisibility(selectedCategory.subcategoryVisibility?.[name], userGroupIds, groups, canSeeAll)
-  ) ?? [];
+  ).sort(compareText) ?? [];
 
   const subcategoryPosts = posts.filter(
     (p) =>
       p.category === selectedCategory?.title &&
       p.subcategory === selectedSubcategory &&
       canSeeVisibility(p.visibility, userGroupIds, groups, canSeeAll)
-  );
+  ).sort(comparePostsByTitle);
   const searchQuery = search.trim().toLowerCase();
   const searchResults = searchQuery
     ? posts.filter((post) => {
@@ -758,7 +766,7 @@ export function KnowledgeBase({
           canSeeVisibility(category?.subcategoryVisibility?.[post.subcategory], userGroupIds, groups, canSeeAll) &&
           getPostSearchText(post).includes(searchQuery)
         );
-      })
+      }).sort(comparePostsByTitle)
     : [];
   const visiblePosts = posts.filter((post) => {
     const category = categories.find((cat) => cat.title === post.category);
