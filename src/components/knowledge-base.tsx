@@ -12,9 +12,11 @@ import { canSeeVisibility, everyoneVisibility, getVisibilityLabel, type Visibili
 import VisibilityEditor from "@/components/VisibilityEditor";
 import {
   deletePostFromDatabase,
+  saveKnowledgeBaseSettings,
   markPostViewed,
   savePostToDatabase,
   savePostsToDatabase,
+  type StoredKnowledgeBaseCategory,
   setPostFavourited,
   setPostPinned,
   type PostUserState
@@ -32,7 +34,7 @@ type LocalPostUserState = Record<string, {
   last_viewed_at: string | null;
 }>;
 
-type StoredCategory = Omit<Category, "icon"> & { iconName: string };
+type StoredCategory = StoredKnowledgeBaseCategory;
 
 const initialCategories: Category[] = categoryCards.map((category) => ({
   ...category,
@@ -158,6 +160,10 @@ function loadStoredCategories() {
 function saveCategoriesToStorage(categories: Category[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(serialiseCategories(categories)));
+}
+
+function hasStoredCategories() {
+  return typeof window !== "undefined" && Boolean(window.localStorage.getItem(CATEGORY_STORAGE_KEY));
 }
 
 function mergePostsWithSeedData(databasePosts: MockPost[], deletedPostIds = new Set<string>()) {
@@ -476,13 +482,17 @@ export function KnowledgeBase({
   userGroupIds = [],
   groups = [],
   initialPosts = [],
-  initialPostUserState = []
+  initialPostUserState = [],
+  initialStoredCategories = null,
+  initialDeletedPostIds = []
 }: {
   userRole?: string;
   userGroupIds?: string[];
   groups?: VisibilityGroup[];
   initialPosts?: MockPost[];
   initialPostUserState?: PostUserState[];
+  initialStoredCategories?: StoredCategory[] | null;
+  initialDeletedPostIds?: string[];
 }) {
   const canEdit = userRole === "super_admin" || userRole === "editor";
   const adminGroupId = groups.find((group) => group.name.toLowerCase() === "admin")?.id;
@@ -492,8 +502,10 @@ export function KnowledgeBase({
       ? canSeeVisibility({ mode: "groups", groupIds: [adminGroupId] }, userGroupIds, groups)
       : false);
 
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [posts, setPosts] = useState<MockPost[]>(() => mergePostsWithSeedData(initialPosts));
+  const serverCategories = initialStoredCategories?.map(hydrateCategory) ?? null;
+  const serverDeletedPostIds = new Set(initialDeletedPostIds);
+  const [categories, setCategories] = useState<Category[]>(serverCategories ?? initialCategories);
+  const [posts, setPosts] = useState<MockPost[]>(() => mergePostsWithSeedData(initialPosts, serverDeletedPostIds));
   const [postUserState, setPostUserState] = useState<LocalPostUserState>(() => getInitialPostUserState(initialPostUserState));
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
@@ -506,6 +518,15 @@ export function KnowledgeBase({
   const [editingSubcategory, setEditingSubcategory] = useState<string | null>(null);
   const [autoEditPostId, setAutoEditPostId] = useState<string | null>(null);
 
+  function persistKnowledgeBaseSettings(nextCategories: Category[], nextDeletedPostIds = loadDeletedPostIds()) {
+    saveCategoriesToStorage(nextCategories);
+    saveDeletedPostIds(nextDeletedPostIds);
+    void saveKnowledgeBaseSettings({
+      categories: serialiseCategories(nextCategories),
+      deletedPostIds: [...nextDeletedPostIds]
+    });
+  }
+
   useEffect(() => {
     const handler = () => { setSelectedCategory(null); setSelectedSubcategory(null); setSelectedPost(null); setSearch(""); };
     window.addEventListener("kb-navigate-home", handler);
@@ -513,11 +534,26 @@ export function KnowledgeBase({
   }, []);
 
   useEffect(() => {
-    setCategories(loadStoredCategories());
-
     const storedPosts = loadStoredPosts();
-    const deletedPostIds = loadDeletedPostIds();
+    const localDeletedPostIds = loadDeletedPostIds();
+    const deletedPostIds = new Set([...initialDeletedPostIds, ...localDeletedPostIds]);
+    const localCategories = hasStoredCategories() ? loadStoredCategories() : null;
+    const nextCategories = localCategories ?? serverCategories ?? initialCategories;
     const alreadyMigrated = window.localStorage.getItem(POST_DB_MIGRATION_KEY) === "true";
+    const shouldUploadLocalSettings =
+      canEdit &&
+      (Boolean(localCategories) || !initialStoredCategories || localDeletedPostIds.size > initialDeletedPostIds.length);
+
+    setCategories(nextCategories);
+    saveCategoriesToStorage(nextCategories);
+    saveDeletedPostIds(deletedPostIds);
+
+    if (shouldUploadLocalSettings) {
+      void saveKnowledgeBaseSettings({
+        categories: serialiseCategories(nextCategories),
+        deletedPostIds: [...deletedPostIds]
+      });
+    }
 
     if (storedPosts && canEdit && !alreadyMigrated) {
       const visibleStoredPosts = storedPosts.filter((post) => !deletedPostIds.has(post.id));
@@ -586,7 +622,7 @@ export function KnowledgeBase({
   function handleAddCategory(category: Category) {
     const updated = [...categories, category];
     setCategories(updated);
-    saveCategoriesToStorage(updated);
+    persistKnowledgeBaseSettings(updated);
   }
 
   function handleAddSubCategory(name: string, visibility: VisibilityRule) {
@@ -601,7 +637,7 @@ export function KnowledgeBase({
         : c
     );
     setCategories(updated);
-    saveCategoriesToStorage(updated);
+    persistKnowledgeBaseSettings(updated);
     setSelectedCategory(updated.find((c) => c.title === selectedCategory.title) ?? null);
   }
 
@@ -621,7 +657,7 @@ export function KnowledgeBase({
       });
     }
     setCategories(next);
-    saveCategoriesToStorage(next);
+    persistKnowledgeBaseSettings(next);
     if (selectedCategory?.title === oldTitle) {
       setSelectedCategory(next.find((c) => c.title === (updated.title ?? oldTitle)) ?? null);
     }
@@ -643,14 +679,27 @@ export function KnowledgeBase({
         : c
     );
     setCategories(updatedCats);
-    saveCategoriesToStorage(updatedCats);
+    persistKnowledgeBaseSettings(updatedCats);
     setSelectedCategory(updatedCats.find((c) => c.title === selectedCategory.title) ?? null);
+    if (newName !== oldName) {
+      setPosts((prev) => {
+        const nextPosts = prev.map((post) =>
+          post.category === selectedCategory.title && post.subcategory === oldName
+            ? { ...post, subcategory: newName }
+            : post
+        );
+        void savePostsToDatabase(
+          nextPosts.filter((post) => post.category === selectedCategory.title && post.subcategory === newName)
+        );
+        return nextPosts;
+      });
+    }
     if (selectedSubcategory === oldName) setSelectedSubcategory(newName);
   }
 
   function handleAddPost(post: MockPost) {
     const deletedPostIds = loadDeletedPostIds();
-    if (deletedPostIds.delete(post.id)) saveDeletedPostIds(deletedPostIds);
+    if (deletedPostIds.delete(post.id)) persistKnowledgeBaseSettings(categories, deletedPostIds);
     setPosts((prev) => [post, ...prev]);
     setSelectedPost(post);
     setSelectedSubcategory(post.subcategory);
@@ -688,7 +737,7 @@ export function KnowledgeBase({
 
     const deletedPostIds = loadDeletedPostIds();
     deletedPostIds.add(postId);
-    saveDeletedPostIds(deletedPostIds);
+    persistKnowledgeBaseSettings(categories, deletedPostIds);
     setPosts((prev) => prev.filter((post) => post.id !== postId));
     setPostUserState((prev) => {
       const next = { ...prev };
@@ -710,7 +759,7 @@ export function KnowledgeBase({
 
     const updatedCategories = categories.filter((item) => item.title !== category.title);
     setCategories(updatedCategories);
-    saveCategoriesToStorage(updatedCategories);
+    persistKnowledgeBaseSettings(updatedCategories);
     if (selectedCategory?.title === category.title) {
       setSelectedCategory(null);
       setSelectedSubcategory(null);
@@ -735,7 +784,7 @@ export function KnowledgeBase({
         : category
     );
     setCategories(updatedCats);
-    saveCategoriesToStorage(updatedCats);
+    persistKnowledgeBaseSettings(updatedCats);
     setSelectedCategory(updatedCats.find((category) => category.title === categoryTitle) ?? null);
     if (selectedSubcategory === subcategoryName) setSelectedSubcategory(null);
     setSelectedPost(null);

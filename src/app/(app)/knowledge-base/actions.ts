@@ -7,6 +7,17 @@ import { createClient } from "@/lib/supabase/server";
 import { type MockPost } from "@/lib/mock-data";
 import { type VisibilityRule } from "@/lib/visibility";
 
+export type StoredKnowledgeBaseCategory = {
+  title: string;
+  description: string;
+  color: string;
+  tags: string[];
+  subcategories: string[];
+  visibility?: VisibilityRule;
+  subcategoryVisibility?: Record<string, VisibilityRule>;
+  iconName: string;
+};
+
 type KbPostRow = {
   id: string;
   title: string;
@@ -17,6 +28,11 @@ type KbPostRow = {
   subcategory: string;
   widgets: Widget[];
   visibility: VisibilityRule;
+};
+
+type KbSettingsRow = {
+  categories: StoredKnowledgeBaseCategory[] | null;
+  deleted_post_ids: string[] | null;
 };
 
 const MAX_SHARE_HOURS = 24 * 30;
@@ -79,6 +95,51 @@ export async function getDatabasePosts(): Promise<MockPost[]> {
       rowToPost(row, await withSignedImageUrls(row.widgets ?? []))
     )
   );
+}
+
+export async function getKnowledgeBaseSettings() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("kb_settings")
+    .select("categories, deleted_post_ids")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load knowledge base settings", error);
+    return { categories: null, deletedPostIds: [] };
+  }
+
+  const row = data as KbSettingsRow | null;
+  return {
+    categories: row?.categories ?? null,
+    deletedPostIds: row?.deleted_post_ids ?? []
+  };
+}
+
+export async function saveKnowledgeBaseSettings(settings: {
+  categories: StoredKnowledgeBaseCategory[];
+  deletedPostIds: string[];
+}) {
+  const current = await getCurrentProfile();
+  if (!current || !["super_admin", "editor"].includes(current.profile.role)) {
+    return { ok: false, error: "You do not have permission to save knowledge base settings." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("kb_settings").upsert({
+    id: true,
+    categories: settings.categories,
+    deleted_post_ids: settings.deletedPostIds,
+    updated_by: current.user.id
+  });
+
+  if (error) {
+    console.error("Failed to save knowledge base settings", error);
+    return { ok: false, error: error.message };
+  }
+
+  return { ok: true };
 }
 
 export async function savePostToDatabase(post: MockPost) {
