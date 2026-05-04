@@ -1978,23 +1978,33 @@ export function PostPage({
             <span className="text-xs text-slate-400">{post.publishedBy || "Unknown"} · {formatDate(post.publishedAt)}</span>
           </div>
         </div>
-        <div className="print-hidden flex shrink-0 flex-wrap gap-2">
+        <div className="print-hidden flex w-full shrink-0 flex-col gap-3 md:w-auto md:max-w-md">
           {editing ? (
             <>
-              {!sharedView && onDeletePost && (
-                <button onClick={deletePost} disabled={deletePending} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent">
-                  <Trash2 className="h-4 w-4" /> {deletePending ? "Deleting..." : "Delete"}
+              <div className="rounded-lg border border-line bg-panel p-3">
+                <VisibilityEditor
+                  label="Post visibility"
+                  visibility={draftVisibility}
+                  groups={groups}
+                  onChange={setDraftVisibility}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 md:justify-end">
+                {!sharedView && onDeletePost && (
+                  <button onClick={deletePost} disabled={deletePending} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent">
+                    <Trash2 className="h-4 w-4" /> {deletePending ? "Deleting..." : "Delete"}
+                  </button>
+                )}
+                <button onClick={cancelEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
+                  <X className="h-4 w-4" /> Cancel
                 </button>
-              )}
-              <button onClick={cancelEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
-                <X className="h-4 w-4" /> Cancel
-              </button>
-              <button onClick={saveEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-                <Save className="h-4 w-4" /> Save
-              </button>
+                <button onClick={saveEdit} className="focus-ring inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
+                  <Save className="h-4 w-4" /> Save
+                </button>
+              </div>
             </>
           ) : (
-            <>
+            <div className="flex flex-wrap gap-2 md:justify-end">
               {!sharedView && (
                 <button onClick={onBack} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-ink hover:bg-panel">
                   <Home className="h-4 w-4" /> Back
@@ -2013,7 +2023,7 @@ export function PostPage({
                   </button>
                 </>
               )}
-            </>
+            </div>
           )}
         </div>
       </header>
@@ -2098,17 +2108,6 @@ export function PostPage({
         )}
 
         {editing && <AddWidgetBar onAdd={(w) => insertWidget(w, -1)} />}
-
-        {editing && (
-          <div className="mb-4 rounded-lg border border-line p-3">
-            <VisibilityEditor
-              label="Post visibility"
-              visibility={draftVisibility}
-              groups={groups}
-              onChange={setDraftVisibility}
-            />
-          </div>
-        )}
 
         {current.map((widget, idx) => (
           <div key={widget.id}>
