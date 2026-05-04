@@ -1082,9 +1082,9 @@ function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
               <span className={item.checked ? "text-slate-500 line-through" : ""}>{item.text || "Checklist item"}</span>
             </div>
             {(item.subpoints?.length ?? 0) > 0 && (
-              <ol className="ml-10 mt-2 space-y-1 pl-4" style={{ listStyleType: "lower-alpha" }}>
+              <ul className="ml-10 mt-2 space-y-1">
                 {item.subpoints?.map((subpoint) => (
-                  <li key={subpoint.id} className="pl-1">
+                  <li key={subpoint.id}>
                     <div className="flex items-start gap-2">
                       <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${subpoint.checked ? "border-brand bg-brand text-white" : "border-slate-300 bg-white text-transparent"}`}>
                         <Check className="h-3 w-3" />
@@ -1093,7 +1093,7 @@ function ChecklistWidgetView({ w }: { w: ChecklistWidget }) {
                     </div>
                   </li>
                 ))}
-              </ol>
+              </ul>
             )}
           </li>
         ))}
@@ -1115,9 +1115,14 @@ function StepsWidgetView({ w }: { w: StepsWidget }) {
             <div className="min-w-0 flex-1 pt-1">
               <p className="text-sm leading-6 text-slate-700">{step.text || "Step instructions"}</p>
               {(step.subpoints?.length ?? 0) > 0 && (
-                <ol className="mt-2 space-y-1 pl-5 text-sm leading-6 text-slate-600" style={{ listStyleType: "lower-alpha" }}>
-                  {step.subpoints?.map((subpoint) => (
-                    <li key={subpoint.id} className="pl-1">{subpoint.text || "Sub-point"}</li>
+                <ol className="mt-2 space-y-2">
+                  {step.subpoints?.map((subpoint, subpointIndex) => (
+                    <li key={subpoint.id} className="flex items-start gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+                        {String.fromCharCode(97 + subpointIndex)}
+                      </span>
+                      <span className="pt-0.5 text-sm leading-5 text-slate-600">{subpoint.text || "Sub-point"}</span>
+                    </li>
                   ))}
                 </ol>
               )}
@@ -1211,9 +1216,8 @@ function ChecklistWidgetEditor({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {(item.subpoints ?? []).map((subpoint, subpointIndex) => (
+            {(item.subpoints ?? []).map((subpoint) => (
               <div key={subpoint.id} className="ml-6 flex items-center gap-2">
-                <span className="w-5 shrink-0 text-xs font-semibold text-slate-500">{String.fromCharCode(97 + subpointIndex)}.</span>
                 <input
                   type="checkbox"
                   checked={subpoint.checked}
@@ -1333,7 +1337,9 @@ function StepsWidgetEditor({
             </div>
             {(step.subpoints ?? []).map((subpoint, subpointIndex) => (
               <div key={subpoint.id} className="ml-10 flex items-center gap-2">
-                <span className="w-5 shrink-0 text-xs font-semibold text-slate-500">{String.fromCharCode(97 + subpointIndex)}.</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+                  {String.fromCharCode(97 + subpointIndex)}
+                </span>
                 <input
                   value={subpoint.text}
                   onChange={(e) => updateSubpoint(step.id, subpoint.id, e.target.value)}
