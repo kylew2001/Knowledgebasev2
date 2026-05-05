@@ -15,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 
 type Step = "username" | "password" | "set-password" | "totp" | "email-otp" | "forgot-password";
+const REMEMBERED_USERNAME_KEY = "knowledgebase-v2-last-username";
 
 const PASSWORD_RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
@@ -60,6 +61,17 @@ export default function LoginForm() {
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const normalizedUsername = username.trim().toLowerCase();
 
+  useEffect(() => {
+    try {
+      const rememberedUsername = window.localStorage.getItem(REMEMBERED_USERNAME_KEY)?.trim().toLowerCase();
+      if (!rememberedUsername) return;
+      setUsername(rememberedUsername);
+      setStep("password");
+    } catch {
+      // Remembering the username is a convenience only; ignore blocked storage.
+    }
+  }, []);
+
   // Countdown timer for email OTP resend
   useEffect(() => {
     if (step !== "email-otp") return;
@@ -80,7 +92,24 @@ export default function LoginForm() {
     return () => clearInterval(id);
   }, [resendCountdown]);
 
+  function forgetRememberedUsername() {
+    try {
+      window.localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+    } catch {
+      // Ignore blocked storage.
+    }
+  }
+
+  function rememberUsername(value: string) {
+    try {
+      window.localStorage.setItem(REMEMBERED_USERNAME_KEY, value);
+    } catch {
+      // Ignore blocked storage.
+    }
+  }
+
   function goBack() {
+    forgetRememberedUsername();
     setStep("username");
     setPassword("");
     setConfirm("");
@@ -102,6 +131,7 @@ export default function LoginForm() {
         setError("Username not found.");
         return;
       }
+      if (!result.requiresPasswordSet) rememberUsername(normalizedUsername);
       setStep(result.requiresPasswordSet ? "set-password" : "password");
     });
   }
